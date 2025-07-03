@@ -17,13 +17,13 @@ def question_mode(retriever, model):
     user_query = st.text_input("Ask a question based on the selected topic:")
     
     if st.button("Get Answer"):
-        if not query or not query.strip():
+        if not user_query or not user_query.strip():
             st.warning("Please enter a valid question.")
             return
 
         with st.spinner("Processing..."):
             # Get documents
-            result = retriever.get_relevant_documents(query)
+            result = retriever.get_relevant_documents(user_query)
             context = "\n\n".join([doc.page_content for doc in result])
 
             # Create prompt
@@ -34,12 +34,12 @@ If anything is asked out of context, kindly reply KEYWORD OUT OF CONTEXT.
 Context:
 {context}
 
-Question: {query}"""
+Question: {user_query}"""
 
             # Call Gemini model
             try:
                 response = model.generate_content(full_prompt)
-                st.success("Gemini Answer:")
+                st.success("Answer:")
                 st.write(response.text)
             except Exception as e:
                 st.error(f"Error: {e}")
