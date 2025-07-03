@@ -165,7 +165,7 @@ def quiz_mode(retriever, model):
                 # Extract a/b/c/d from selected option
                 selected = user_ans[0].lower() if user_ans else ''
                 feedback = check_answer(question_text, selected, model)
-                st.write("Gemini says:", feedback)
+                st.write(feedback)
 
                 if feedback.strip().lower().startswith("correct"):
                     qdata['score'] += 1
