@@ -27,9 +27,9 @@ menu = st.sidebar.radio("Choose an option:",[
                         "Exit"])
 
 if menu == "Ask a question": 
-    question_mode()
+    question_mode(retriever,model)
 elif menu == "Run Quiz":
-    quiz_mode()
+    quiz_mode(retriever,model)
 elif menu == "View Performance Chart":
     plot_score()
 elif menu == "Quiz History":

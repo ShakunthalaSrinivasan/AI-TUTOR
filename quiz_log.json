@@ -1,0 +1,22 @@
+[
+  {
+    "topic": "Human Disease",
+    "score": 1,
+    "total": 2,
+    "timestamp": "2025-07-03T18:37:10.502433",
+    "questions": [
+      "Q1. Which test is specifically mentioned for diagnosing Typhoid in the provided text?\na) Blood pressure test\nb) Widal test\nc) Alveoli fluid test\nd) Genetic test",
+      "Q2. According to the text, what is the definition of health?\na) The absence of any disease or illness.\nb) A state of mental, social, and physical being.\nc) A condition where organs and organ systems are disturbed.\nd) Only the physical well-being of an individual."
+    ]
+  },
+  {
+    "topic": "sexual reproduction in plants",
+    "score": 1,
+    "total": 2,
+    "timestamp": "2025-07-03T18:38:56.037427",
+    "questions": [
+      "Q1. Which of the following are considered essential whorls of a flower?\na) Calyx and Corolla\nb) Androecium and Gynoecium\nc) Sepals and Petals\nd) Stamens and Petals",
+      "Q2. In which adaptation for self-pollination do bisexual flowers never open throughout their lives?\na) Monocliny\nb) Homogamy\nc) Cleistogamy\nd) Dichogamy"
+    ]
+  }
+]
