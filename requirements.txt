@@ -1,0 +1,9 @@
+streamlit
+langchain
+langchain-community
+faiss-cpu
+google-generativeai
+sentence-transformers
+tiktoken
+matplotlib
+pandas
