@@ -17,7 +17,7 @@ def question_mode(retriever, model):
     user_query = st.text_input("Ask a question based on the selected topic:")
     
     if st.button("Get Answer"):
-        if not query.strip():
+        if not query or not query.strip():
             st.warning("Please enter a valid question.")
             return
 
@@ -47,10 +47,10 @@ Question: {query}"""
 def generate_mcqs(context, model, num_qs=2):
     prompt = f"""
     Rules:
-    DO CREATE {num_qs} multiple-choice questions based only on the following context.
+    DO CREATE {num_qs} MCQs based only on the following context.
     1. Start each question with Q1, Q2, Q3,...
     2. After each question wait for the user answer.
-    3. For each question, give exactly 4 options labeled a, b, c, d.
+    3. For each question, give exactly 4 options labeled a-d.
     4. FORMAT should be the same. DO NOT add any extra text.
     5. Do not reveal the correct answer.
     6. Make questions directly based on the context.
