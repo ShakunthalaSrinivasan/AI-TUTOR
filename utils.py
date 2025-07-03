@@ -24,12 +24,10 @@ def question_mode(retriever, model):
         with st.spinner("Processing..."):
             # Get documents
             result = retriever.get_relevant_documents(user_query)
-            context = "\n\n".join([doc.page_content for doc in result])
+            context = "\n\n".join([doc.page_content[:500] for doc in result])
 
             # Create prompt
-            full_prompt = f"""Answer the question based on the following context.
-Be concise.
-If anything is asked out of context, kindly reply KEYWORD OUT OF CONTEXT.
+            full_prompt = f"""Answer briefly using the following context. If irrelevant, say: OUT OF CONTEXT.
 
 Context:
 {context}
@@ -134,7 +132,7 @@ def quiz_mode(retriever, model):
     if st.button("Start Quiz") and topic:
         with st.spinner("Generating quiz..."):
             docs = retriever.get_relevant_documents(topic)
-            context = "\n\n".join(doc.page_content for doc in docs[:1])
+            context = "\n\n".join(doc.page_content[:500] for doc in docs[:1])
             mcq_text = generate_mcqs(context, model, num_qs)
 
             questions = re.split(r"\n(?=Q\d+\.)", mcq_text)
