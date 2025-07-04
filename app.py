@@ -21,14 +21,14 @@ genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 # --- Load Vectorstore ---
 
 @st.cache_resource
-def load_vectorstore(openai_api_key, index_path="vector_store/faiss_index"):
+def load_vectorstore(index_path="vector_store/faiss_index"):
     os.environ["OPENAI_API_KEY"] = openai_api_key
     embeddings = OpenAIEmbeddings()
     vectorstore = FAISS.load_local(index_path, embeddings)
     retriever = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 5})
     return retriever
 
-retriever = load_vectorstore(openai_api_key)
+retriever = load_vectorstore()
 
 # --- Load Gemini Model ---
 model = genai.GenerativeModel("gemini-2.5-flash")
