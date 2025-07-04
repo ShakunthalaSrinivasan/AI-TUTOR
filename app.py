@@ -21,7 +21,7 @@ genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 # --- Load Vectorstore ---
 
 @st.cache_resource
-def load_vectorstore(openai_api_key: openai_api_key, index_path="vector_store/faiss_index"):
+def load_vectorstore(openai_api_key, index_path="vector_store/faiss_index"):
     os.environ["OPENAI_API_KEY"] = openai_api_key
     embeddings = OpenAIEmbeddings()
     vectorstore = FAISS.load_local(index_path, embeddings)
