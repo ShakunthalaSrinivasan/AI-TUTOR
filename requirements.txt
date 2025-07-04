@@ -7,3 +7,4 @@ python-dotenv
 sentence-transformers
 matplotlib
 pandas
+tiktoken
