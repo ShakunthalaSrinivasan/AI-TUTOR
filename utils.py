@@ -42,22 +42,29 @@ Question: {user_query}"""
             except Exception as e:
                 st.error(f"Error: {e}")
 
-def generate_mcqs(context, model, num_qs=2):
-    prompt = f"""
-    Rules:
-    DO CREATE {num_qs} MCQs based only on the following context.
-    1. Start each question with Q1, Q2, Q3,...
-    2. After each question wait for the user answer.
-    3. For each question, give exactly 4 options labeled a-d.
-    4. FORMAT should be the same. DO NOT add any extra text.
-    5. Do not reveal the correct answer.
-    6. Make questions directly based on the context.
+def generate_mcqs(context, model, num_qs):
+    prompt = f"""You are a NEET Biology tutor. Based on the context below, generate exactly {num_qs} multiple choice questions.
 
-    Context:
-    {context}
-    """
+Each question should be in this format:
+Q1. <question text>
+a) <option a>
+b) <option b>
+c) <option c>
+d) <option d>
+
+DO NOT REVEAL THE ANSWER BEFORE THE USER ANSWERS THE QUESTION.
+
+
+Context:
+\"\"\"
+{context}
+\"\"\"
+Only provide the questions and answer key as described above. Do not skip any numbers.
+"""
+
     response = model.generate_content(prompt, generation_config={"temperature": 0})
     return response.text
+
 
 def check_answer(question, user_answer, model):
     prompt = f"""
@@ -118,65 +125,100 @@ def save_quiz_score(topic, questions, score, total, file_path="quiz_log.json"):
     with open(file_path, "w") as f:
         json.dump(logs, f, indent=2)
 
+    
+import streamlit as st
+import re
+from utils import generate_mcqs, check_answer, save_quiz_score, update_topicwise_performance
+
 def quiz_mode(retriever, model):
-    st.subheader("Quiz Generator")
+    st.subheader("Quiz Mode")
+
+    if "quiz_state" not in st.session_state:
+        st.session_state.quiz_state = {
+            "started": False,
+            "topic": "",
+            "questions": [],
+            "index": 0,
+            "score": 0,
+            "total": 2,
+        }
+
+    state = st.session_state.quiz_state
 
     topic_options = [
-    "Biodiversity and Conservation",
-    "Sexual Reproduction in Plants",
-    "Human Health and Disease"]
+        "Biodiversity and Conservation",
+        "Sexual Reproduction in Plants",
+        "Human Health and Disease"
+    ]
 
-    topic = st.selectbox("Select a topic to generate quiz:", topic_options)
-    num_qs = st.slider("Number of Questions", 1, 10, 3)
+    if not state["started"]:
+        topic = st.selectbox("Choose a topic:", topic_options)
+        num_qs = st.slider("Select number of questions", 1, 10, 2)
 
-    if st.button("Start Quiz") and topic:
-        with st.spinner("Generating quiz..."):
-            docs = retriever.get_relevant_documents(topic)
-            context = "\n\n".join(doc.page_content[:500] for doc in docs[:1])
-            mcq_text = generate_mcqs(context, model, num_qs)
+        if st.button("Start Quiz"):
+            with st.spinner("Generating quiz..."):
+                docs = retriever.get_relevant_documents(topic)
+                context = "\n\n".join(doc.page_content for doc in docs[:5])
+                mcq_text = generate_mcqs(context, model, num_qs)
 
-            questions = re.split(r"\n(?=Q\d+\.)", mcq_text)
-            questions = [q.strip() for q in questions if q.strip()]
-            
-            st.session_state['quiz'] = {
-                'topic': topic,
-                'questions': questions,
-                'index': 0,
-                'score': 0,
-                'num_qs': num_qs
-            }
+                questions = re.split(r"\n(?=Q\d+\.)", mcq_text)
+                questions = [q.strip() for q in questions if q.strip()]
 
-    # Show next question
-    if 'quiz' in st.session_state:
-        qdata = st.session_state['quiz']
-        index = qdata['index']
+                state.update({
+                    "started": True,
+                    "topic": topic,
+                    "questions": questions,
+                    "index": 0,
+                    "score": 0,
+                    "total": len(questions),
+                })
+            st.rerun()
 
-        if index < len(qdata['questions']):
-            question_text = qdata['questions'][index]
-            st.markdown(f"### Q{index + 1}")
-            st.text(question_text)
+    else:
+        questions = state["questions"]
+        index = state["index"]
 
-            options = re.findall(r"[a-d]\)\s.*", question_text)
-            user_ans = st.radio("Choose your answer:", options, key=f"q{index}")
+        if index < len(questions):
+            q = questions[index]
+            st.markdown(f"### Q{index+1}")
+            for line in q.splitlines():
+                st.text(line.strip())
 
-            if st.button("Submit", key=f"submit{index}"):
-                # Extract a/b/c/d from selected option
-                selected = user_ans[0].lower() if user_ans else ''
-                feedback = check_answer(question_text, selected, model)
-                st.write(feedback)
+            options = re.findall(r"[a-d]\)\s.*", q)
+            selected = st.radio("Choose your answer:", options, key=f"q{index}_opt")
 
-                if feedback.strip().lower().startswith("correct"):
-                    qdata['score'] += 1
+            if f"submitted_{index}" not in st.session_state:
+                st.session_state[f"submitted_{index}"] = False
 
-                qdata['index'] += 1  # Move to next question
-                st.experimental_rerun()
+            if not st.session_state[f"submitted_{index}"]:
+                if st.button("Submit", key=f"submit_{index}"):
+                    selected_letter = selected[0].lower() if selected else ""
+                    feedback = check_answer(q, selected_letter, model)
+                    st.session_state[f"feedback_{index}"] = feedback
+                    st.session_state[f"submitted_{index}"] = True
 
+                    if feedback.strip().lower().startswith("correct"):
+                        state["score"] += 1
+
+                    state["index"] += 1
+                    st.rerun()
+            else:
+                st.write(st.session_state.get(f"feedback_{index}", ""))
         else:
-            st.success(f"Quiz Completed! Score: {qdata['score']}/{qdata['num_qs']}")
-            save_quiz_score(qdata['topic'], qdata['questions'], qdata['score'], qdata['num_qs'])
-            update_topicwise_performance(qdata['topic'], qdata['score'], qdata['num_qs'])
-            del st.session_state['quiz']
+            st.success(f"Quiz Completed! Your Score: {state['score']} / {state['total']}")
+            save_quiz_score(state["topic"], questions, state["score"], state["total"])
+            update_topicwise_performance(state["topic"], state["score"], state["total"])
 
+            if st.button("Restart Quiz"):
+                st.session_state.quiz_state = {
+                    "started": False,
+                    "topic": "",
+                    "questions": [],
+                    "index": 0,
+                    "score": 0,
+                    "total": 2,
+                }
+                st.rerun()
 
 def plot_score(file_path="quiz_log.json"):
     if not os.path.exists(file_path):

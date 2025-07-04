@@ -1,9 +1,9 @@
 streamlit
 langchain
-langchain-community
 faiss-cpu
+openai
 google-generativeai
+python-dotenv
 sentence-transformers
-tiktoken
 matplotlib
 pandas
