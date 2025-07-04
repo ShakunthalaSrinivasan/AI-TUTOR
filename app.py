@@ -15,7 +15,7 @@ st.title("AI Tutor for NEET Biology")
 load_dotenv()
 
 # Configure API keys
-openai_key = os.getenv("OPENAI_API_KEY")
+openai_api_key = os.getenv("OPENAI_API_KEY")
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 # --- Load Vectorstore ---
