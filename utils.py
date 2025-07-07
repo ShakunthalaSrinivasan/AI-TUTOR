@@ -90,6 +90,7 @@ Instructions:
 2. Second line should say: "The correct answer is X) ..." (e.g., 'The correct answer is b)')
 3. One-line explanation why it's correct.
 
+Each output must appear on a new line. No merging.
 Do not repeat the question or all options.
 
 """
