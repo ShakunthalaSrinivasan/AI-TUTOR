@@ -188,12 +188,14 @@ def quiz_mode(retriever, model):
     if "quiz_state" not in st.session_state:
         st.session_state.quiz_state = {
             "started": False,
+            "username": "",
             "topic": "",
             "questions": [],
             "index": 0,
             "score": 0,
-            "total": 2,
+            "total": 0,
             "selected_answers": [],
+            "correct_answers": [],
             "correctness": [],
         }
 
@@ -214,14 +216,15 @@ def quiz_mode(retriever, model):
             if not username.strip():
                 st.warning("Please enter your name to start the quiz.")
                 return
+
             with st.spinner("Generating quiz..."):
                 docs = retriever.get_relevant_documents(topic)
                 context = "\n\n".join(doc.page_content for doc in docs[:5])
                 mcq_text = generate_mcqs(context, model, num_qs)
-    
+
                 questions = re.split(r"\n(?=Q\d+\.)", mcq_text)
                 questions = [q.strip() for q in questions if q.strip()]
-    
+
                 state.update({
                     "started": True,
                     "username": username.strip(),
@@ -231,6 +234,7 @@ def quiz_mode(retriever, model):
                     "score": 0,
                     "total": len(questions),
                     "selected_answers": [],
+                    "correct_answers": [],  
                     "correctness": [],
                 })
             st.rerun()
@@ -244,13 +248,11 @@ def quiz_mode(retriever, model):
             q_lines = q.splitlines()
 
             st.markdown(f"### Question {index + 1} of {state['total']}")
-            st.markdown(f"**{q_lines[0]}**")  # The main question
+            st.markdown(f"**{q_lines[0]}**")
 
-            # Extract options
             options = [line for line in q_lines[1:] if re.match(r"[A-Da-d]\)", line)]
             selected = st.radio("Choose your answer:", options, key=f"q{index}_opt")
 
-            # Check if submitted
             if f"submitted_{index}" not in st.session_state:
                 st.session_state[f"submitted_{index}"] = False
 
@@ -260,7 +262,6 @@ def quiz_mode(retriever, model):
                     feedback, correct_answer = check_answer(q, selected_letter, model)
                     is_correct = feedback.strip().lower().startswith("correct")
 
-                    # Store feedback and result in session_state
                     st.session_state[f"feedback_{index}"] = feedback
                     st.session_state[f"correct_answer_{index}"] = correct_answer
                     st.session_state[f"selected_letter_{index}"] = selected_letter
@@ -269,24 +270,27 @@ def quiz_mode(retriever, model):
                     st.rerun()
 
             else:
-                # Show feedback
                 st.markdown(f"**Feedback:** {st.session_state.get(f'feedback_{index}', '')}")
 
-                # Next button
                 if st.button("Next", key=f"next_{index}"):
                     selected_letter = st.session_state.get(f"selected_letter_{index}", "")
+                    correct_answer = st.session_state.get(f"correct_answer_{index}", "?")
                     is_correct = st.session_state.get(f"is_correct_{index}", False)
 
                     state["selected_answers"].append(selected_letter)
+                    state["correct_answers"].append(correct_answer)
                     state["correctness"].append(is_correct)
+
                     if is_correct:
                         state["score"] += 1
+
                     state["index"] += 1
                     st.rerun()
 
         else:
-            # Quiz completed
             st.success(f"Quiz Completed! Your Score: {state['score']} / {state['total']}")
+
+            # Save to Google Sheet
             save_detailed_quiz_to_gsheet(
                 state["username"],
                 state["topic"],
@@ -295,21 +299,23 @@ def quiz_mode(retriever, model):
                 state["correct_answers"],
                 state["correctness"]
             )
+
             update_topicwise_performance(state["topic"], state["score"], state["total"])
 
             if st.button("Restart Quiz"):
                 st.session_state.quiz_state = {
                     "started": False,
+                    "username": "",
                     "topic": "",
                     "questions": [],
                     "index": 0,
                     "score": 0,
-                    "total": 2,
+                    "total": 0,
                     "selected_answers": [],
+                    "correct_answers": [],
                     "correctness": [],
                 }
                 st.rerun()
-
 
 def plot_score(file_path="quiz_log.json"):
     if not os.path.exists(file_path):
