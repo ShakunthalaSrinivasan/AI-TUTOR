@@ -79,7 +79,7 @@ def generate_mcqs(context, model, num_qs):
 
 def check_answer(question, user_answer, model):
     prompt = f"""
-You are an exam checker. A student answered this MCQ:
+You are an expert NEET Biology examiner. Evaluate the student's answer to the following MCQ using the context provided.
 
 {question}
 
@@ -96,7 +96,7 @@ Do not repeat the question or all options.
     response = model.generate_content(prompt)
     response_text=response.text.strip()
     
-    match = re.search(r"[Cc]orrect.*?([a-dA-D])\)", response_text)
+    match = re.search(r"[Tt]he correct answer is ([a-dA-D])\)", response_text)
     correct_letter = match.group(1).lower() if match else "?"
     is_correct = user_answer.lower() == correct_letter
     
