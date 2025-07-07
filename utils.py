@@ -197,6 +197,7 @@ def quiz_mode(retriever, model):
             "selected_answers": [],
             "correct_answers": [],
             "correctness": [],
+            "saved_to_sheet": False
         }
 
     state = st.session_state.quiz_state
