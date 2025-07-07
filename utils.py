@@ -89,7 +89,7 @@ Do not repeat the question or all options.
     
     match = re.search(r"[Cc]orrect.*?([a-dA-D])\)", response_text)
     correct_letter = match.group(1).lower() if match else "?"
-     is_correct = user_answer.lower() == correct_letter
+    is_correct = user_answer.lower() == correct_letter
     
     return response_text, correct_letter, is_correct
 
