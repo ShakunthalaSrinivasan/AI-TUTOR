@@ -46,8 +46,7 @@ Question: {user_query}"""
                 st.error(f"Error: {e}")
 
 def generate_mcqs(context, model, num_qs):
-
-     variation_tag = random.choice([
+    variation_tag = random.choice([
         "Ensure these questions are phrased differently from earlier ones.",
         "Try not to repeat phrasing from previous sets.",
         "This set should sound slightly different.",
@@ -55,25 +54,25 @@ def generate_mcqs(context, model, num_qs):
         "Avoid repeating earlier structure exactly."
     ])
     prompt = f"""You are a NEET Biology tutor. Based on the context below, generate exactly {num_qs} multiple choice questions.
-
-Each question should be in this format:
-Q1. <question text>
-a) <option a>
-b) <option b>
-c) <option c>
-d) <option d>
-
-DO NOT REVEAL THE ANSWER BEFORE THE USER ANSWERS THE QUESTION.
-
-{variation_tag}
-
-Context:
-\"\"\"
-{context}
-\"\"\"
-Only provide the questions and answer key as described above. Do not skip any numbers.
-"""
-
+    
+    Each question should be in this format:
+    Q1. <question text>
+    a) <option a>
+    b) <option b>
+    c) <option c>
+    d) <option d>
+    
+    DO NOT REVEAL THE ANSWER BEFORE THE USER ANSWERS THE QUESTION.
+    
+    {variation_tag}
+    
+    Context:
+    \"\"\"
+    {context}
+    \"\"\"
+    Only provide the questions and answer key as described above. Do not skip any numbers.
+    """
+    
     response = model.generate_content(prompt, generation_config={"temperature": 0.0})
     return response.text
 
