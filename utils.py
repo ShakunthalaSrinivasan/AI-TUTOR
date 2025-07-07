@@ -109,21 +109,45 @@ def update_topicwise_performance(topic, score, total, file_path="topics.json"):
     with open(file_path, "w") as f:
         json.dump(stats, f, indent=2)
 
-def save_quiz_score(topic, questions, score, total, file_path="quiz_log.json"):
-    quiz_data = {
-        "topic": topic,
-        "score": score,
-        "total": total,
-        "timestamp": datetime.now().isoformat(),
-        "questions": questions
-    }
-    logs = []
-    if os.path.exists(file_path):
-        with open(file_path, "r") as f:
-            logs = json.load(f)
-    logs.append(quiz_data)
-    with open(file_path, "w") as f:
-        json.dump(logs, f, indent=2)
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+
+def get_gsheet_client():
+    scope = [
+        "https://spreadsheets.google.com/feeds",
+        "https://www.googleapis.com/auth/drive"
+    ]
+    creds_dict = st.secrets["gcp_service_account"]
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(dict(creds_dict), scope)
+    return gspread.authorize(creds)
+
+def save_detailed_quiz_to_gsheet(topic, questions, selected_answers, correctness):
+    try:
+        client = get_gsheet_client()
+        sheet = client.open("quiz_scores").sheet1  # Make sure this sheet exists
+
+        # Optional: Add header if needed
+        if sheet.row_count == 0 or sheet.cell(1, 1).value is None:
+            sheet.append_row(["Topic", "Q#", "Question", "Correct Answer", "Your Answer", "Result"])
+
+        for idx, (q, user_answer, is_correct) in enumerate(zip(questions, selected_answers, correctness), 1):
+            question_text = q.splitlines()[0].strip()
+            correct_answer = "Not Available"
+            match = re.search(r"Correct answer[:\s]+([a-d])", q, re.IGNORECASE)
+            if match:
+                correct_answer = match.group(1)
+
+            sheet.append_row([
+                topic,
+                f"Q{idx}",
+                question_text,
+                correct_answer,
+                user_answer,
+                "Correct" if is_correct else "Incorrect"
+            ])
+
+    except Exception as e:
+        st.error(f"Google Sheets error: {e}")
 
     
 import streamlit as st
@@ -140,6 +164,8 @@ def quiz_mode(retriever, model):
             "index": 0,
             "score": 0,
             "total": 2,
+            "selected_answers": [],
+            "correctness": []
         }
 
     state = st.session_state.quiz_state
@@ -170,6 +196,8 @@ def quiz_mode(retriever, model):
                     "index": 0,
                     "score": 0,
                     "total": len(questions),
+                    "selected_answers": [],
+                    "correctness": []
                 })
             st.rerun()
 
@@ -179,16 +207,12 @@ def quiz_mode(retriever, model):
 
         if index < len(questions):
             q = questions[index]
-            q_lines = q.splitlines()
+            for line in q.splitlines():
+                st.text(line.strip())
 
-            st.markdown(f"### Question {index + 1} of {state['total']}")
-            st.markdown(f"**{q_lines[0]}**")  # The main question
-
-            # Extract and display options
-            options = [line for line in q_lines[1:] if re.match(r"[A-Da-d]\)", line)]
+            options = re.findall(r"[a-d]\)\s.*", q)
             selected = st.radio("Choose your answer:", options, key=f"q{index}_opt")
 
-            # Handle submission state
             if f"submitted_{index}" not in st.session_state:
                 st.session_state[f"submitted_{index}"] = False
 
@@ -196,23 +220,24 @@ def quiz_mode(retriever, model):
                 if st.button("Submit", key=f"submit_{index}"):
                     selected_letter = selected[0].lower() if selected else ""
                     feedback = check_answer(q, selected_letter, model)
+
                     st.session_state[f"feedback_{index}"] = feedback
                     st.session_state[f"submitted_{index}"] = True
-            else:
-                # Show feedback
-                st.markdown(f"**Feedback:** {st.session_state.get(f'feedback_{index}', '')}")
 
-                # Next button to proceed
-                if st.button("Next", key=f"next_{index}"):
-                    if st.session_state[f"feedback_{index}"].strip().lower().startswith("correct"):
+                    is_correct = feedback.strip().lower().startswith("correct")
+                    if is_correct:
                         state["score"] += 1
+
+                    state["selected_answers"].append(selected_letter)
+                    state["correctness"].append(is_correct)
                     state["index"] += 1
                     st.rerun()
-
+            else:
+                st.write(st.session_state.get(f"feedback_{index}", ""))
         else:
-            # Quiz completed
             st.success(f"Quiz Completed! Your Score: {state['score']} / {state['total']}")
             save_quiz_score(state["topic"], questions, state["score"], state["total"])
+            save_detailed_quiz_to_gsheet(state["topic"], questions, state["selected_answers"], state["correctness"])
             update_topicwise_performance(state["topic"], state["score"], state["total"])
 
             if st.button("Restart Quiz"):
@@ -223,6 +248,8 @@ def quiz_mode(retriever, model):
                     "index": 0,
                     "score": 0,
                     "total": 2,
+                    "selected_answers": [],
+                    "correctness": []
                 }
                 st.rerun()
 

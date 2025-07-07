@@ -8,3 +8,5 @@ sentence-transformers
 matplotlib
 pandas
 tiktoken
+gspread
+oauth2client
