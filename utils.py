@@ -79,11 +79,11 @@ Tell only correct or incorrect.
 
 """
     response = model.generate_content(prompt)
-    response.text.strip()
-    match = re.search(r"[Cc]orrect.*?([a-dA-D])\)", response)
+    response_text=response.text.strip()
+    match = re.search(r"[Cc]orrect.*?([a-dA-D])\)", response_text)
     correct_letter = match.group(1).lower() if match else "?"
 
-    return response, correct_letter
+    return response_text, correct_letter
  
 
 import pandas as pd
