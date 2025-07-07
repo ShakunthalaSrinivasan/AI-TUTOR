@@ -62,7 +62,7 @@ Context:
 Only provide the questions and answer key as described above. Do not skip any numbers.
 """
 
-    response = model.generate_content(prompt, generation_config={"temperature": 0})
+    response = model.generate_content(prompt, generation_config={"temperature": 0.8})
     return response.text
 
 
@@ -79,23 +79,58 @@ Tell only correct or incorrect.
 
 """
     response = model.generate_content(prompt)
-    return response.text.strip()
+    response.text.strip()
+    match = re.search(r"[Cc]orrect.*?([a-dA-D])\)", response)
+    correct_letter = match.group(1).lower() if match else "?"
 
-def view_quiz_history(file_path="quiz_log.json"):
-    import streamlit as st
-    from datetime import datetime
+    return response, correct_letter
+ 
 
-    if not os.path.exists(file_path):
-        st.warning("No quiz data yet.")
+import pandas as pd
+
+def view_my_results():
+    st.subheader("View My Quiz Results")
+
+    username = st.text_input("Enter your name to view your results:")
+
+    if not username:
+        st.info("Please enter your name above to load your results.")
         return
 
-    with open(file_path, "r") as f:
-        logs = json.load(f)
+    try:
+        client = get_gsheet_client()
+        sheet = client.open("quiz_scores").sheet1
+        data = sheet.get_all_records()
 
-    st.subheader("Quiz History")
-    for i, entry in enumerate(logs, 1):
-        date = datetime.fromisoformat(entry["timestamp"]).strftime("%Y-%m-%d %H:%M")
-        st.write(f"{i}. [{date}] Topic: {entry['topic']} - Score: {entry['score']}/{entry['total']}")
+        if not data:
+            st.info("No quiz results found yet.")
+            return
+
+        df = pd.DataFrame(data)
+
+        # Filter for current user
+        df_user = df[df["Username"].str.lower() == username.strip().lower()]
+
+        if df_user.empty:
+            st.warning("No results found for this name.")
+            return
+
+        st.success(f"Showing results for: {username}")
+        st.dataframe(df_user)
+
+        # Download as CSV
+        csv = df_user.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="Download Results as CSV",
+            data=csv,
+            file_name=f"{username}_quiz_results.csv",
+            mime="text/csv"
+        )
+
+    except Exception as e:
+        st.error(f"Failed to load results: {e}")
+
+
 
 def update_topicwise_performance(topic, score, total, file_path="topics.json"):
     stats = {}
@@ -121,33 +156,27 @@ def get_gsheet_client():
     creds = ServiceAccountCredentials.from_json_keyfile_dict(dict(creds_dict), scope)
     return gspread.authorize(creds)
 
-def save_detailed_quiz_to_gsheet(topic, questions, selected_answers, correctness):
-    try:
-        client = get_gsheet_client()
-        sheet = client.open("quiz_scores").sheet1  # Make sure this sheet exists
+def save_detailed_quiz_to_gsheet(username,topic, questions, selected_answers, correct_answers, correctness):
+    client = get_gsheet_client()
+    sheet = client.open("quiz_scores").sheet1
 
-        # Optional: Add header if needed
-        if sheet.row_count == 0 or sheet.cell(1, 1).value is None:
-            sheet.append_row(["Topic", "Q#", "Question", "Correct Answer", "Your Answer", "Result"])
+    for i in range(len(questions)):
+        question_text = questions[i].splitlines()[0]
+        selected = selected_answers[i]
+        correct = correct_answers[i]
+        result = "Correct" if correctness[i] else "Incorrect"
 
-        for idx, (q, user_answer, is_correct) in enumerate(zip(questions, selected_answers, correctness), 1):
-            question_text = q.splitlines()[0].strip()
-            correct_answer = "Not Available"
-            match = re.search(r"Correct answer[:\s]+([a-d])", q, re.IGNORECASE)
-            if match:
-                correct_answer = match.group(1)
-
-            sheet.append_row([
-                topic,
-                f"Q{idx}",
-                question_text,
-                correct_answer,
-                user_answer,
-                "Correct" if is_correct else "Incorrect"
-            ])
-
-    except Exception as e:
-        st.error(f"Google Sheets error: {e}")
+        row = [
+            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            username,
+            topic,
+            f"Q{i+1}",
+            question_text,
+            correct,
+            selected,
+            result,
+        ]
+        sheet.append_row(row)
 
     
 import streamlit as st
@@ -177,29 +206,34 @@ def quiz_mode(retriever, model):
     ]
 
     if not state["started"]:
+        username = st.text_input("Enter your name:")
         topic = st.selectbox("Choose a topic:", topic_options)
         num_qs = st.slider("Select number of questions", 1, 10, 2)
 
         if st.button("Start Quiz"):
-            with st.spinner("Generating quiz..."):
-                docs = retriever.get_relevant_documents(topic)
-                context = "\n\n".join(doc.page_content for doc in docs[:5])
-                mcq_text = generate_mcqs(context, model, num_qs)
-
-                questions = re.split(r"\n(?=Q\d+\.)", mcq_text)
-                questions = [q.strip() for q in questions if q.strip()]
-
-                state.update({
-                    "started": True,
-                    "topic": topic,
-                    "questions": questions,
-                    "index": 0,
-                    "score": 0,
-                    "total": len(questions),
-                    "selected_answers": [],
-                    "correctness": [],
-                })
-            st.rerun()
+            if not username.strip():
+            st.warning("Please enter your name to start the quiz.")
+            return
+                with st.spinner("Generating quiz..."):
+                    docs = retriever.get_relevant_documents(topic)
+                    context = "\n\n".join(doc.page_content for doc in docs[:5])
+                    mcq_text = generate_mcqs(context, model, num_qs)
+    
+                    questions = re.split(r"\n(?=Q\d+\.)", mcq_text)
+                    questions = [q.strip() for q in questions if q.strip()]
+    
+                    state.update({
+                        "started": True,
+                        "username": username.strip(),
+                        "topic": topic,
+                        "questions": questions,
+                        "index": 0,
+                        "score": 0,
+                        "total": len(questions),
+                        "selected_answers": [],
+                        "correctness": [],
+                    })
+                st.rerun()
 
     else:
         questions = state["questions"]
@@ -223,11 +257,12 @@ def quiz_mode(retriever, model):
             if not st.session_state[f"submitted_{index}"]:
                 if st.button("Submit", key=f"submit_{index}"):
                     selected_letter = selected[0].lower() if selected else ""
-                    feedback = check_answer(q, selected_letter, model)
+                    feedback, correct_answer = check_answer(q, selected_letter, model)
                     is_correct = feedback.strip().lower().startswith("correct")
 
                     # Store feedback and result in session_state
                     st.session_state[f"feedback_{index}"] = feedback
+                    st.session_state[f"correct_answer_{index}"] = correct_answer
                     st.session_state[f"selected_letter_{index}"] = selected_letter
                     st.session_state[f"is_correct_{index}"] = is_correct
                     st.session_state[f"submitted_{index}"] = True
@@ -252,7 +287,14 @@ def quiz_mode(retriever, model):
         else:
             # Quiz completed
             st.success(f"Quiz Completed! Your Score: {state['score']} / {state['total']}")
-            save_detailed_quiz_to_gsheet(state["topic"], questions, state["selected_answers"], state["correctness"])
+            save_detailed_quiz_to_gsheet(
+                state["username"]
+                state["topic"],
+                state["questions"],
+                state["selected_answers"],
+                state["correct_answers"],
+                state["correctness"]
+            )
             update_topicwise_performance(state["topic"], state["score"], state["total"])
 
             if st.button("Restart Quiz"):

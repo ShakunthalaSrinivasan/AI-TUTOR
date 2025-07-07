@@ -23,7 +23,8 @@ genai.configure(api_key=gemini_api_key)
 def load_vectorstore(index_path="vector_store/faiss_index"):
     os.environ["OPENAI_API_KEY"] = openai_api_key
     embeddings = OpenAIEmbeddings(openai_api_key=openai_api_key)
-    vectorstore = FAISS.load_local(index_path, embeddings, allow_dangerous_deserialization=True)
+    vectorstore = FAISS.load_local(index_path, embeddings, allow_dangerous_deserialization=True
+                                  )
     retriever = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 5})
     return retriever
 
@@ -51,8 +52,8 @@ elif menu == "Run Quiz":
 elif menu == "View Performance Chart":
     plot_score()
 
-elif menu == "Quiz History":
-    view_quiz_history()
+elif menu == "View my Results":
+    view_my_results()
 
 elif menu == "Exit":
     st.write("Thanks for using AI Tutor!")
