@@ -235,8 +235,9 @@ def quiz_mode(retriever, model):
                     "score": 0,
                     "total": len(questions),
                     "selected_answers": [],
-                    "correct_answers": [],  
+                    "correct_answers": [],
                     "correctness": [],
+                    "saved_to_sheet": False
                 })
             st.rerun()
 
@@ -291,24 +292,23 @@ def quiz_mode(retriever, model):
         else:
             st.success(f"Quiz Completed! Your Score: {state['score']} / {state['total']}")
 
-            # Save to Google Sheet
-            save_detailed_quiz_to_gsheet(
-                state["username"],
-                state["topic"],
-                state["questions"],
-                state["selected_answers"],
-                state["correct_answers"],
-                state["correctness"]
-            )
+            if not state["saved_to_sheet"]:
+                save_detailed_quiz_to_gsheet(
+                    state["username"],
+                    state["topic"],
+                    state["questions"],
+                    state["selected_answers"],
+                    state["correct_answers"],
+                    state["correctness"]
+                )
+                update_topicwise_performance(state["topic"], state["score"], state["total"])
+                state["saved_to_sheet"] = True
 
-            update_topicwise_performance(state["topic"], state["score"], state["total"])
-            state["saved_to_sheet"]
-            
             if st.button("Restart Quiz"):
                 keys_to_clear = [key for key in st.session_state if key.startswith("feedback_") or key.startswith("submitted_") or key.startswith("selected_letter_") or key.startswith("is_correct_") or key.startswith("correct_answer_") or key.startswith("q")]
                 for key in keys_to_clear:
                     del st.session_state[key]
-                
+
                 st.session_state.quiz_state = {
                     "started": False,
                     "username": "",
@@ -320,6 +320,7 @@ def quiz_mode(retriever, model):
                     "selected_answers": [],
                     "correct_answers": [],
                     "correctness": [],
+                    "saved_to_sheet": False
                 }
                 st.rerun()
 
