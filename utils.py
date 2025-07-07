@@ -109,7 +109,7 @@ def view_my_results():
         df = pd.DataFrame(data)
 
         # Filter for current user
-        df_user = df[df["Username"].str.lower() == username.strip().lower()]
+        df_user = df[df["User Name"].str.lower() == username.strip().lower()]
 
         if df_user.empty:
             st.warning("No results found for this name.")
@@ -301,8 +301,13 @@ def quiz_mode(retriever, model):
             )
 
             update_topicwise_performance(state["topic"], state["score"], state["total"])
-
+            state["saved_to_sheet"]
+            
             if st.button("Restart Quiz"):
+                keys_to_clear = [key for key in st.session_state if key.startswith("feedback_") or key.startswith("submitted_") or key.startswith("selected_letter_") or key.startswith("is_correct_") or key.startswith("correct_answer_") or key.startswith("q")]
+                for key in keys_to_clear:
+                    del st.session_state[key]
+                
                 st.session_state.quiz_state = {
                     "started": False,
                     "username": "",
