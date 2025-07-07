@@ -164,6 +164,8 @@ def quiz_mode(retriever, model):
             "index": 0,
             "score": 0,
             "total": 2,
+            "selected_answers": [],
+            "correctness": [],
         }
 
     state = st.session_state.quiz_state
@@ -194,6 +196,8 @@ def quiz_mode(retriever, model):
                     "index": 0,
                     "score": 0,
                     "total": len(questions),
+                    "selected_answers": [],
+                    "correctness": [],
                 })
             st.rerun()
 
@@ -208,11 +212,11 @@ def quiz_mode(retriever, model):
             st.markdown(f"### Question {index + 1} of {state['total']}")
             st.markdown(f"**{q_lines[0]}**")  # The main question
 
-            # Extract and display options
+            # Extract options
             options = [line for line in q_lines[1:] if re.match(r"[A-Da-d]\)", line)]
             selected = st.radio("Choose your answer:", options, key=f"q{index}_opt")
 
-            # Handle submission state
+            # Check if submitted
             if f"submitted_{index}" not in st.session_state:
                 st.session_state[f"submitted_{index}"] = False
 
@@ -220,18 +224,28 @@ def quiz_mode(retriever, model):
                 if st.button("Submit", key=f"submit_{index}"):
                     selected_letter = selected[0].lower() if selected else ""
                     feedback = check_answer(q, selected_letter, model)
+                    is_correct = feedback.strip().lower().startswith("correct")
+
+                    # Store feedback and result in session_state
                     st.session_state[f"feedback_{index}"] = feedback
+                    st.session_state[f"selected_letter_{index}"] = selected_letter
+                    st.session_state[f"is_correct_{index}"] = is_correct
                     st.session_state[f"submitted_{index}"] = True
+                    st.rerun()
+
             else:
                 # Show feedback
                 st.markdown(f"**Feedback:** {st.session_state.get(f'feedback_{index}', '')}")
 
-                # Next button to proceed
+                # Next button
                 if st.button("Next", key=f"next_{index}"):
-                    if st.session_state[f"feedback_{index}"].strip().lower().startswith("correct"):
-                        state["score"] += 1
+                    selected_letter = st.session_state.get(f"selected_letter_{index}", "")
+                    is_correct = st.session_state.get(f"is_correct_{index}", False)
+
                     state["selected_answers"].append(selected_letter)
                     state["correctness"].append(is_correct)
+                    if is_correct:
+                        state["score"] += 1
                     state["index"] += 1
                     st.rerun()
 
@@ -249,8 +263,11 @@ def quiz_mode(retriever, model):
                     "index": 0,
                     "score": 0,
                     "total": 2,
+                    "selected_answers": [],
+                    "correctness": [],
                 }
                 st.rerun()
+
 
 def plot_score(file_path="quiz_log.json"):
     if not os.path.exists(file_path):
