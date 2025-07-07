@@ -1,5 +1,6 @@
 import streamlit as st
 import re
+import random
 from datetime import datetime
 import json, os
 import pandas as pd
@@ -26,7 +27,7 @@ def question_mode(retriever, model):
         with st.spinner("Processing..."):
             # Get documents
             result = retriever.get_relevant_documents(user_query)
-            context = "\n\n".join([doc.page_content[:500] for doc in result])
+            context = "\n\n".join([doc.page_content for doc in result])
 
             # Create prompt
             full_prompt = f"""Answer briefly using the following context. If irrelevant, say: OUT OF CONTEXT.
@@ -39,12 +40,20 @@ Question: {user_query}"""
             # Call Gemini model
             try:
                 response = model.generate_content(full_prompt)
-                st.success("Answer:")
-                st.write(response.text)
+                st.success()
+                st.write("Answer:",response.text)
             except Exception as e:
                 st.error(f"Error: {e}")
 
 def generate_mcqs(context, model, num_qs):
+
+     variation_tag = random.choice([
+        "Ensure these questions are phrased differently from earlier ones.",
+        "Try not to repeat phrasing from previous sets.",
+        "This set should sound slightly different.",
+        "Rephrase questions uniquely while preserving accuracy.",
+        "Avoid repeating earlier structure exactly."
+    ])
     prompt = f"""You are a NEET Biology tutor. Based on the context below, generate exactly {num_qs} multiple choice questions.
 
 Each question should be in this format:
@@ -56,6 +65,7 @@ d) <option d>
 
 DO NOT REVEAL THE ANSWER BEFORE THE USER ANSWERS THE QUESTION.
 
+{variation_tag}
 
 Context:
 \"\"\"
@@ -217,6 +227,7 @@ def quiz_mode(retriever, model):
 
             with st.spinner("Generating quiz..."):
                 docs = retriever.get_relevant_documents(topic)
+                random.shuffle(docs)
                 context = "\n\n".join(doc.page_content for doc in docs[:5])
                 mcq_text = generate_mcqs(context, model, num_qs)
 
