@@ -84,10 +84,12 @@ Provide one line explanation. Avoid repeating question or options.
 """
     response = model.generate_content(prompt)
     response_text=response.text.strip()
+    
     match = re.search(r"[Cc]orrect.*?([a-dA-D])\)", response_text)
     correct_letter = match.group(1).lower() if match else "?"
-
-    return response_text, correct_letter
+    is_correct = user_answer == correct_letter
+    
+    return response_text, correct_letter, is_correct
 
 def view_my_results():
     st.subheader("View My Quiz Results")
@@ -254,7 +256,7 @@ def quiz_mode(retriever, model):
             if not st.session_state[f"submitted_{index}"]:
                 if st.button("Submit", key=f"submit_{index}"):
                     selected_letter = selected[0].lower() if selected else ""
-                    feedback, correct_answer = check_answer(q, selected_letter, model)
+                    feedback, correct_answer, is_correct = check_answer(q, selected_letter, model)
                     is_correct = feedback.strip().lower().startswith("correct")
 
                     st.session_state[f"feedback_{index}"] = feedback
