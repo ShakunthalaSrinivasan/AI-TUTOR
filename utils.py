@@ -76,8 +76,10 @@ You are an exam checker. A student answered this MCQ:
 
 Student's answer: {user_answer}
 
-Tell if it's correct or not and reveal the CORRECT ANSWER WITH ONE LINE EXPLANATION.
-Tell only correct or incorrect.
+Tell if it's correct or not and also reveal the correct answer like this:
+"The correct answer is b) ..." (Start this line with 'The correct answer is').
+
+Provide one line explanation. Avoid repeating question or options.
 
 """
     response = model.generate_content(prompt)
@@ -316,7 +318,7 @@ def quiz_mode(retriever, model):
                 st.rerun()
 
 def plot_score():
-    st.subheader("Performance Trend (Topic-wise over Time)")
+    st.subheader("Performance Trend (Topic-wise Over Time)")
 
     try:
         client = get_gsheet_client()
@@ -329,39 +331,32 @@ def plot_score():
 
         df = pd.DataFrame(records)
 
-        # Basic validation
-        required_cols = {"User Name", "Date", "Topic", "Result", "Q#"}
+        required_cols = {"User Name", "Date", "Topic", "Result"}
         if not required_cols.issubset(df.columns):
-            st.error("Google Sheet must contain columns: User Name, Date, Topic, Result, Q#")
+            st.error("Missing required columns in Google Sheet.")
             return
 
-        # Get user selection
         usernames = sorted(df["User Name"].dropna().unique())
         selected_user = st.selectbox("Select user:", usernames)
 
-        # Filter for selected user
-        user_df = df[df["User Name"] == selected_user].copy()
-        if user_df.empty:
-            st.warning("No records for selected user.")
-            return
+        df = df[df["User Name"] == selected_user].copy()
 
-        # Preprocess
-        user_df["Date"] = pd.to_datetime(user_df["Date"], errors="coerce")
-        user_df["Result"] = user_df["Result"].str.strip().str.lower()
-        user_df["Correct"] = user_df["Result"].apply(lambda x: 1 if x == "correct" else 0)
+        # Round to minute to group by quiz attempt
+        df["Date"] = pd.to_datetime(df["Date"], errors="coerce").dt.floor("min")
+        df["Result"] = df["Result"].str.lower().str.strip()
+        df["Correct"] = df["Result"].apply(lambda x: 1 if x == "correct" else 0)
 
-        # Group by topic + date to get accuracy
-        grouped = user_df.groupby(["Topic", "Date"]).agg(
-            total_qs=pd.NamedAgg(column="Q#", aggfunc="count"),
-            correct=pd.NamedAgg(column="Correct", aggfunc="sum")).reset_index()
+        grouped = df.groupby(["Date", "Topic"]).agg(
+            total_qs=pd.NamedAgg(column="Result", aggfunc="count"),
+            correct=pd.NamedAgg(column="Correct", aggfunc="sum")
+        ).reset_index()
+
         grouped["Accuracy"] = (grouped["correct"] / grouped["total_qs"]) * 100
-        grouped.sort_values("Date", inplace=True)
 
         if grouped.empty:
-            st.info("No quiz attempts to plot.")
+            st.info("No quiz records to plot.")
             return
 
-        # Plot: Line chart (historical trend)
         st.markdown(f"### Accuracy Trend for *{selected_user}*")
 
         plt.clf()
@@ -380,8 +375,7 @@ def plot_score():
         st.pyplot(fig)
 
     except Exception as e:
-        st.error(f"Error loading performance data: {e}")
-
+        st.error(f"Failed to load score trend: {e}")
 
 
 
