@@ -4,6 +4,8 @@ from datetime import datetime
 import json, os
 import pandas as pd
 import matplotlib.pyplot as plt
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
 
 def question_mode(retriever, model):
     st.subheader("Ask a Question")
@@ -84,9 +86,6 @@ Tell only correct or incorrect.
     correct_letter = match.group(1).lower() if match else "?"
 
     return response_text, correct_letter
- 
-
-import pandas as pd
 
 def view_my_results():
     st.subheader("View My Quiz Results")
@@ -131,7 +130,6 @@ def view_my_results():
         st.error(f"Failed to load results: {e}")
 
 
-
 def update_topicwise_performance(topic, score, total, file_path="topics.json"):
     stats = {}
     if os.path.exists(file_path):
@@ -143,9 +141,6 @@ def update_topicwise_performance(topic, score, total, file_path="topics.json"):
     stats[topic]["total"] += total
     with open(file_path, "w") as f:
         json.dump(stats, f, indent=2)
-
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
 
 def get_gsheet_client():
     scope = [
@@ -177,10 +172,6 @@ def save_detailed_quiz_to_gsheet(username,topic, questions, selected_answers, co
             result,
         ]
         sheet.append_row(row)
-
-    
-import streamlit as st
-import re
 
 def quiz_mode(retriever, model):
     st.subheader("Quiz Mode")
@@ -324,67 +315,72 @@ def quiz_mode(retriever, model):
                 }
                 st.rerun()
 
-def plot_score(file_path="quiz_log.json"):
-    if not os.path.exists(file_path):
-        st.warning("No quiz history yet.")
-        return
+def plot_score():
+    st.subheader("Performance Trend (Topic-wise over Time)")
 
-    with open(file_path, "r") as f:
-        logs = json.load(f)
+    try:
+        client = get_gsheet_client()
+        sheet = client.open("quiz_scores").sheet1
+        records = sheet.get_all_records()
 
-    data = []
-    for entry in logs:
-        data.append({
-            "Date": datetime.fromisoformat(entry["timestamp"]),
-            "Topic": entry["topic"],
-            "Score": entry["score"],
-            "Total": entry["total"]
-        })
+        if not records:
+            st.info("No quiz data available.")
+            return
 
-    df = pd.DataFrame(data)
-    df["Accuracy"] = (df["Score"] / df["Total"]) * 100
-    df.sort_values("Date", inplace=True)
+        df = pd.DataFrame(records)
 
-    if df.empty:
-        st.info("No quiz records to show yet.")
-        return
+        # Basic validation
+        required_cols = {"User Name", "Date", "Topic", "Result", "Q#"}
+        if not required_cols.issubset(df.columns):
+            st.error("Google Sheet must contain columns: User Name, Date, Topic, Result, Q#")
+            return
 
-    # Line Chart - Topic-wise trend
-    st.subheader("Topic-wise Accuracy Over Time")
+        # Get user selection
+        usernames = sorted(df["User Name"].dropna().unique())
+        selected_user = st.selectbox("Select user:", usernames)
 
-    plt.clf()
-    fig1, ax1 = plt.subplots(figsize=(10, 5))
-    for topic in df["Topic"].unique():
-        topic_df = df[df["Topic"] == topic]
-        ax1.plot(topic_df["Date"], topic_df["Accuracy"], marker="o", label=topic)
+        # Filter for selected user
+        user_df = df[df["User Name"] == selected_user].copy()
+        if user_df.empty:
+            st.warning("No records for selected user.")
+            return
 
-    ax1.set_title("Performance Trend by Topic")
-    ax1.set_ylabel("Accuracy (%)")
-    ax1.set_ylim(0, 110)
-    ax1.legend()
-    ax1.grid(True)
-    fig1.autofmt_xdate()
-    plt.tight_layout()
-    st.pyplot(fig1)
+        # Preprocess
+        user_df["Date"] = pd.to_datetime(user_df["Date"], errors="coerce")
+        user_df["Result"] = user_df["Result"].str.strip().str.lower()
+        user_df["Correct"] = user_df["Result"].apply(lambda x: 1 if x == "correct" else 0)
 
-    # Bar Chart - Latest accuracy per topic
-    st.subheader("Latest Accuracy Per Topic")
+        # Group by topic + date to get accuracy
+        grouped = user_df.groupby(["Topic", "Date"]).agg(
+            total_qs=pd.NamedAgg(column="Q#", aggfunc="count"),
+            correct=pd.NamedAgg(column="Correct", aggfunc="sum")).reset_index()
+        grouped["Accuracy"] = (grouped["correct"] / grouped["total_qs"]) * 100
+        grouped.sort_values("Date", inplace=True)
 
-    latest = df.sort_values("Date").groupby("Topic").tail(1)
+        if grouped.empty:
+            st.info("No quiz attempts to plot.")
+            return
 
-    plt.clf()
-    fig2, ax2 = plt.subplots(figsize=(10, 5))
-    ax2.bar(latest["Topic"], latest["Accuracy"], color="skyblue")
+        # Plot: Line chart (historical trend)
+        st.markdown(f"### Accuracy Trend for *{selected_user}*")
 
-    for i, row in enumerate(latest.itertuples()):
-        ax2.text(i, row.Accuracy + 2, f"{row.Accuracy:.1f}%", ha="center")
+        plt.clf()
+        fig, ax = plt.subplots(figsize=(10, 5))
 
-    ax2.set_ylabel("Accuracy (%)")
-    ax2.set_ylim(0, 110)
-    ax2.set_title("Most Recent Quiz Accuracy")
-    ax2.grid(True, axis="y")
-    plt.tight_layout()
-    st.pyplot(fig2)
+        for topic in grouped["Topic"].unique():
+            topic_df = grouped[grouped["Topic"] == topic]
+            ax.plot(topic_df["Date"], topic_df["Accuracy"], marker="o", label=topic)
+
+        ax.set_ylabel("Accuracy (%)")
+        ax.set_title("Topic-wise Accuracy Over Time")
+        ax.set_ylim(0, 110)
+        ax.legend(title="Topic")
+        ax.grid(True)
+        fig.autofmt_xdate()
+        st.pyplot(fig)
+
+    except Exception as e:
+        st.error(f"Error loading performance data: {e}")
 
 
 
