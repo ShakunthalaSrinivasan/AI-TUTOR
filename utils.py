@@ -74,7 +74,7 @@ You are an exam checker. A student answered this MCQ:
 
 Student's answer: {user_answer}
 
-Tell if it's correct or not and reveal the correct answer with one line explanation.
+Tell if it's correct or not and reveal the CORRECT ANSWER WITH ONE LINE EXPLANATION.
 Tell only correct or incorrect.
 
 """
