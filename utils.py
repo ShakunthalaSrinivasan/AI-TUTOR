@@ -212,28 +212,28 @@ def quiz_mode(retriever, model):
 
         if st.button("Start Quiz"):
             if not username.strip():
-            st.warning("Please enter your name to start the quiz.")
-            return
-                with st.spinner("Generating quiz..."):
-                    docs = retriever.get_relevant_documents(topic)
-                    context = "\n\n".join(doc.page_content for doc in docs[:5])
-                    mcq_text = generate_mcqs(context, model, num_qs)
+                st.warning("Please enter your name to start the quiz.")
+                return
+            with st.spinner("Generating quiz..."):
+                docs = retriever.get_relevant_documents(topic)
+                context = "\n\n".join(doc.page_content for doc in docs[:5])
+                mcq_text = generate_mcqs(context, model, num_qs)
     
-                    questions = re.split(r"\n(?=Q\d+\.)", mcq_text)
-                    questions = [q.strip() for q in questions if q.strip()]
+                questions = re.split(r"\n(?=Q\d+\.)", mcq_text)
+                questions = [q.strip() for q in questions if q.strip()]
     
-                    state.update({
-                        "started": True,
-                        "username": username.strip(),
-                        "topic": topic,
-                        "questions": questions,
-                        "index": 0,
-                        "score": 0,
-                        "total": len(questions),
-                        "selected_answers": [],
-                        "correctness": [],
-                    })
-                st.rerun()
+                state.update({
+                    "started": True,
+                    "username": username.strip(),
+                    "topic": topic,
+                    "questions": questions,
+                    "index": 0,
+                    "score": 0,
+                    "total": len(questions),
+                    "selected_answers": [],
+                    "correctness": [],
+                })
+            st.rerun()
 
     else:
         questions = state["questions"]
@@ -288,7 +288,7 @@ def quiz_mode(retriever, model):
             # Quiz completed
             st.success(f"Quiz Completed! Your Score: {state['score']} / {state['total']}")
             save_detailed_quiz_to_gsheet(
-                state["username"]
+                state["username"],
                 state["topic"],
                 state["questions"],
                 state["selected_answers"],
