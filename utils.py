@@ -180,7 +180,7 @@ def quiz_mode(retriever, model):
 
         if index < len(questions):
             q = questions[index]
-            st.markdown(f"### Q{index+1}")
+            ##st.markdown(f"### Q{index+1}")
             for line in q.splitlines():
                 st.text(line.strip())
 
