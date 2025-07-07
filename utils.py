@@ -128,7 +128,6 @@ def save_quiz_score(topic, questions, score, total, file_path="quiz_log.json"):
     
 import streamlit as st
 import re
-from utils import generate_mcqs, check_answer, save_quiz_score, update_topicwise_performance
 
 def quiz_mode(retriever, model):
     st.subheader("Quiz Mode")
@@ -178,36 +177,40 @@ def quiz_mode(retriever, model):
         questions = state["questions"]
         index = state["index"]
 
-        q = questions[index]
-        q_lines = q.splitlines()
-        st.markdown(f"**{q_lines[0]}**")
+        if index < len(questions):
+            q = questions[index]
+            q_lines = q.splitlines()
 
-        options = [line for line in q_lines[1:] if re.match(r"[A-Da-d]\)", line)]
-        selected = st.radio("Choose your answer:", options, key=f"q{index}_opt")
-        
-        if f"submitted_{index}" not in st.session_state:
-            st.session_state[f"submitted_{index}"] = False
-        
-        if not st.session_state[f"submitted_{index}"]:
-            if st.button("Submit", key=f"submit_{index}"):
-                selected_letter = selected[0].lower() if selected else ""
-                feedback = check_answer(q, selected_letter, model)
-                st.session_state[f"feedback_{index}"] = feedback
-                st.session_state[f"submitted_{index}"] = True
-        
-        else:
-            # Show feedback
-            st.write(st.session_state.get(f"feedback_{index}", ""))
-        
-            # Wait for user to proceed
-            if st.button("Next", key=f"next_{index}"):
-                if st.session_state[f"feedback_{index}"].strip().lower().startswith("correct"):
-                    state["score"] += 1
-                state["index"] += 1
-                st.rerun()
+            st.markdown(f"### Question {index + 1} of {state['total']}")
+            st.markdown(f"**{q_lines[0]}**")  # The main question
+
+            # Extract and display options
+            options = [line for line in q_lines[1:] if re.match(r"[A-Da-d]\)", line)]
+            selected = st.radio("Choose your answer:", options, key=f"q{index}_opt")
+
+            # Handle submission state
+            if f"submitted_{index}" not in st.session_state:
+                st.session_state[f"submitted_{index}"] = False
+
+            if not st.session_state[f"submitted_{index}"]:
+                if st.button("Submit", key=f"submit_{index}"):
+                    selected_letter = selected[0].lower() if selected else ""
+                    feedback = check_answer(q, selected_letter, model)
+                    st.session_state[f"feedback_{index}"] = feedback
+                    st.session_state[f"submitted_{index}"] = True
             else:
-                st.write(st.session_state.get(f"feedback_{index}", ""))
+                # Show feedback
+                st.markdown(f"**Feedback:** {st.session_state.get(f'feedback_{index}', '')}")
+
+                # Next button to proceed
+                if st.button("Next", key=f"next_{index}"):
+                    if st.session_state[f"feedback_{index}"].strip().lower().startswith("correct"):
+                        state["score"] += 1
+                    state["index"] += 1
+                    st.rerun()
+
         else:
+            # Quiz completed
             st.success(f"Quiz Completed! Your Score: {state['score']} / {state['total']}")
             save_quiz_score(state["topic"], questions, state["score"], state["total"])
             update_topicwise_performance(state["topic"], state["score"], state["total"])
@@ -222,6 +225,7 @@ def quiz_mode(retriever, model):
                     "total": 2,
                 }
                 st.rerun()
+
 
 def plot_score(file_path="quiz_log.json"):
     if not os.path.exists(file_path):
