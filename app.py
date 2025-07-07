@@ -3,7 +3,7 @@ import streamlit as st
 import google.generativeai as genai
 from langchain.embeddings import OpenAIEmbeddings
 from langchain.vectorstores import FAISS
-from utils import quiz_mode, question_mode, plot_score, view_quiz_history
+from utils import quiz_mode, question_mode, plot_score, view_my_results
 
 # Streamlit Config
 st.set_page_config(page_title="AI Tutor")
