@@ -76,10 +76,12 @@ You are an exam checker. A student answered this MCQ:
 
 Student's answer: {user_answer}
 
-Tell if it's correct or not and also reveal the correct answer like this:
-"The correct answer is b) ..." (Start this line with 'The correct answer is').
+Instructions:
+1. First line should be either 'Correct' or 'Incorrect' (based on student's answer).
+2. Second line should say: "The correct answer is X) ..." (e.g., 'The correct answer is b)')
+3. One-line explanation why it's correct.
 
-Provide one line explanation. Avoid repeating question or options.
+Do not repeat the question or all options.
 
 """
     response = model.generate_content(prompt)
@@ -87,7 +89,7 @@ Provide one line explanation. Avoid repeating question or options.
     
     match = re.search(r"[Cc]orrect.*?([a-dA-D])\)", response_text)
     correct_letter = match.group(1).lower() if match else "?"
-    is_correct = user_answer == correct_letter
+     is_correct = user_answer.lower() == correct_letter
     
     return response_text, correct_letter, is_correct
 
@@ -257,7 +259,7 @@ def quiz_mode(retriever, model):
                 if st.button("Submit", key=f"submit_{index}"):
                     selected_letter = selected[0].lower() if selected else ""
                     feedback, correct_answer, is_correct = check_answer(q, selected_letter, model)
-                    is_correct = feedback.strip().lower().startswith("correct")
+                    ##is_correct = feedback.strip().lower().startswith("correct")
 
                     st.session_state[f"feedback_{index}"] = feedback
                     st.session_state[f"correct_answer_{index}"] = correct_answer
