@@ -62,7 +62,7 @@ Context:
 Only provide the questions and answer key as described above. Do not skip any numbers.
 """
 
-    response = model.generate_content(prompt, generation_config={"temperature": 0.8})
+    response = model.generate_content(prompt, generation_config={"temperature": 0.0})
     return response.text
 
 
