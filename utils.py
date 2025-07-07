@@ -178,30 +178,33 @@ def quiz_mode(retriever, model):
         questions = state["questions"]
         index = state["index"]
 
-        if index < len(questions):
-            q = questions[index]
-            ##st.markdown(f"### Q{index+1}")
-            for line in q.splitlines():
-                st.text(line.strip())
+        q = questions[index]
+        q_lines = q.splitlines()
+        st.markdown(f"**{q_lines[0]}**")
 
-            options = re.findall(r"[a-d]\)\s.*", q)
-            selected = st.radio("Choose your answer:", options, key=f"q{index}_opt")
-
-            if f"submitted_{index}" not in st.session_state:
-                st.session_state[f"submitted_{index}"] = False
-
-            if not st.session_state[f"submitted_{index}"]:
-                if st.button("Submit", key=f"submit_{index}"):
-                    selected_letter = selected[0].lower() if selected else ""
-                    feedback = check_answer(q, selected_letter, model)
-                    st.session_state[f"feedback_{index}"] = feedback
-                    st.session_state[f"submitted_{index}"] = True
-
-                    if feedback.strip().lower().startswith("correct"):
-                        state["score"] += 1
-
-                    state["index"] += 1
-                    st.rerun()
+        options = [line for line in q_lines[1:] if re.match(r"[A-Da-d]\)", line)]
+        selected = st.radio("Choose your answer:", options, key=f"q{index}_opt")
+        
+        if f"submitted_{index}" not in st.session_state:
+            st.session_state[f"submitted_{index}"] = False
+        
+        if not st.session_state[f"submitted_{index}"]:
+            if st.button("Submit", key=f"submit_{index}"):
+                selected_letter = selected[0].lower() if selected else ""
+                feedback = check_answer(q, selected_letter, model)
+                st.session_state[f"feedback_{index}"] = feedback
+                st.session_state[f"submitted_{index}"] = True
+        
+        else:
+            # Show feedback
+            st.write(st.session_state.get(f"feedback_{index}", ""))
+        
+            # Wait for user to proceed
+            if st.button("Next", key=f"next_{index}"):
+                if st.session_state[f"feedback_{index}"].strip().lower().startswith("correct"):
+                    state["score"] += 1
+                state["index"] += 1
+                st.rerun()
             else:
                 st.write(st.session_state.get(f"feedback_{index}", ""))
         else:
