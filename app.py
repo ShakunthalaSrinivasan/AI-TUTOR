@@ -38,7 +38,7 @@ menu = st.sidebar.radio("Choose an option:", [
     "Ask a question",
     "Run Quiz",
     "View Performance Chart",
-    "Quiz History",
+    "View my Results",
     "Exit"
 ])
 
