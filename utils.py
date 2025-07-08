@@ -394,33 +394,27 @@ def plot_score():
 
 
 def leaderboard():
-    st.subheader("Leaderboard - Per Topic Rankings")
+    st.subheader("Leaderboard by Topic")
 
-    # Load Google Sheet
     try:
         client = get_gsheet_client()
         sheet = client.open("quiz_scores").sheet1
         df = pd.DataFrame(sheet.get_all_records())
 
-        # Clean columns
-        df["User Name"] = df["User Name"].str.strip()
-        df["Topic"] = df["Topic"].str.strip()
-        df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
-        df["Result"] = df["Result"].str.strip().str.lower()
-        df["Correct"] = df["Result"].apply(lambda x: 1 if x == "correct" else 0)
-
-        # Choose topic
-        topic_options = sorted(df["Topic"].dropna().unique())
-        selected_topic = st.selectbox("Choose a topic to view leaderboard:", topic_options)
-
-        # Filter by topic
-        df_topic = df[df["Topic"] == selected_topic].copy()
-
-        if df_topic.empty:
-            st.info("No data for the selected topic.")
+        required_cols = {"User Name", "Date", "Topic", "Result"}
+        if not required_cols.issubset(df.columns):
+            st.error("Missing required columns in Google Sheet.")
             return
 
-        # Latest attempt per user
+        df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+        df["Result"] = df["Result"].str.lower().str.strip()
+        df["Correct"] = df["Result"].apply(lambda x: 1 if x == "correct" else 0)
+
+        topic_options = sorted(df["Topic"].dropna().unique())
+        selected_topic = st.selectbox("Select Topic", topic_options)
+
+        df_topic = df[df["Topic"] == selected_topic]
+
         latest_attempts = (
             df_topic.groupby("User Name")["Date"]
             .max()
@@ -429,23 +423,31 @@ def leaderboard():
         )
 
         merged = pd.merge(df_topic, latest_attempts, on=["User Name"], how="inner")
-        latest_df = merged[merged["Date"] == merged["Latest_Date"]]
 
-        # Leaderboard summary
+        # Convert both to datetime with same format
+        merged["Date"] = pd.to_datetime(merged["Date"])
+        merged["Latest_Date"] = pd.to_datetime(merged["Latest_Date"])
+        merged["Date_str"] = merged["Date"].dt.strftime("%Y-%m-%d %H:%M:%S")
+        merged["Latest_Date_str"] = merged["Latest_Date"].dt.strftime("%Y-%m-%d %H:%M:%S")
+
+        latest_df = merged[merged["Date_str"] == merged["Latest_Date_str"]]
+
         summary = (
             latest_df.groupby("User Name")
             .agg(
-                Accuracy=("Correct", lambda x: round((x.sum() / len(x)) * 100, 2)),
+                Accuracy=("Correct", lambda x: round((x.sum() / len(x)) * 100)),
                 Questions=("Correct", "count"),
-                Last_Attempt=("Date", "first")
+                Latest_Attempt=("Date", "first"),
             )
             .reset_index()
-            .sort_values(by="Accuracy", ascending=False)
+            .sort_values("Accuracy", ascending=False)
             .reset_index(drop=True)
         )
+
         summary.insert(0, "Rank", range(1, len(summary) + 1))
 
         st.dataframe(summary)
 
     except Exception as e:
         st.error(f"Failed to load leaderboard: {e}")
+
