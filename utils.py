@@ -40,8 +40,7 @@ Question: {user_query}"""
             # Call Gemini model
             try:
                 response = model.generate_content(full_prompt)
-                st.success()
-                st.write("Answer:",response.text)
+                st.success(f"Answer: {response.text.strip()}")
             except Exception as e:
                 st.error(f"Error: {e}")
 
