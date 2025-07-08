@@ -406,6 +406,7 @@ def leaderboard():
             st.error("Missing required columns in Google Sheet.")
             return
 
+        # Preprocess
         df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
         df["Result"] = df["Result"].str.lower().str.strip()
         df["Correct"] = df["Result"].apply(lambda x: 1 if x == "correct" else 0)
@@ -422,15 +423,12 @@ def leaderboard():
             .rename(columns={"Date": "Latest_Date"})
         )
 
-        merged = pd.merge(df_topic, latest_attempts, on=["User Name"], how="inner")
+        merged = pd.merge(df_topic, latest_attempts, on="User Name", how="inner")
 
-        # Convert both to datetime with same format
-        merged["Date"] = pd.to_datetime(merged["Date"])
-        merged["Latest_Date"] = pd.to_datetime(merged["Latest_Date"])
-        merged["Date_str"] = merged["Date"].dt.strftime("%Y-%m-%d %H:%M:%S")
-        merged["Latest_Date_str"] = merged["Latest_Date"].dt.strftime("%Y-%m-%d %H:%M:%S")
-
-        latest_df = merged[merged["Date_str"] == merged["Latest_Date_str"]]
+        # Compare only date (not time) to avoid microsecond mismatches
+        merged["Date_only"] = merged["Date"].dt.date
+        merged["Latest_Date_only"] = merged["Latest_Date"].dt.date
+        latest_df = merged[merged["Date_only"] == merged["Latest_Date_only"]]
 
         summary = (
             latest_df.groupby("User Name")
@@ -445,9 +443,9 @@ def leaderboard():
         )
 
         summary.insert(0, "Rank", range(1, len(summary) + 1))
-
         st.dataframe(summary)
 
     except Exception as e:
         st.error(f"Failed to load leaderboard: {e}")
+
 
