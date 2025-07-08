@@ -392,47 +392,61 @@ def plot_score():
     except Exception as e:
         st.error(f"Failed to load score trend: {e}")
 
-
 def leaderboard():
+
     st.header("Leaderboard by Topic")
 
     try:
+        # Fetch data from Google Sheet
         client = get_gsheet_client()
         sheet = client.open("quiz_scores").sheet1
         records = sheet.get_all_records()
 
         if not records:
-            st.warning("No quiz data found.")
+            st.info("No quiz data found.")
             return
 
+        # Convert to DataFrame
         df = pd.DataFrame(records)
 
-        # Basic cleaning
+        # Clean and preprocess
         df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
-        df["Result"] = df["Result"].str.lower().str.strip()
+        df.dropna(subset=["Date"], inplace=True)
+        df["User Name"] = df["User Name"].str.strip()
+        df["Topic"] = df["Topic"].str.strip()
+        df["Result"] = df["Result"].str.strip().str.lower()
         df["Correct"] = df["Result"].apply(lambda x: 1 if x == "correct" else 0)
 
+        # Topic selection
         topic_options = sorted(df["Topic"].dropna().unique())
         selected_topic = st.selectbox("Select a topic to view leaderboard:", topic_options)
 
         # Filter by topic
-        df_topic = df[df["Topic"] == selected_topic]
+        df_topic = df[df["Topic"] == selected_topic].copy()
 
         if df_topic.empty:
-            st.info("No quiz data for selected topic.")
+            st.warning("No records for this topic.")
             return
 
-        # Group: get latest quiz attempt per user
-        latest_attempts = (df_topic.groupby("User Name")["Date"].max().reset_index().rename(columns={"Date": "Latest_Date"}))
+        # Latest attempt per user
+        latest_attempts = (
+            df_topic.groupby("User Name")["Date"]
+            .max()
+            .reset_index()
+            .rename(columns={"Date": "Latest_Date"})
+        )
 
+        # Merge to get only latest rows
         merged = pd.merge(df_topic, latest_attempts, on=["User Name"], how="inner")
         latest_df = merged[merged["Date"] == merged["Latest_Date"]]
 
-        summary = (latest_df.groupby("User Name").agg(
+        # Summarize accuracy
+        summary = (
+            latest_df.groupby("User Name").agg(
                 Accuracy=("Correct", lambda x: round((x.sum() / len(x)) * 100)),
                 Questions=("Correct", "count"),
                 Latest_Attempt=("Date", "first"),
-                ##Total_Attempts=("User Name", "count")
+                Total_Attempts=("User Name", lambda x: df_topic["User Name"].value_counts()[x.name])
             )
             .reset_index()
             .sort_values("Accuracy", ascending=False)
@@ -441,9 +455,10 @@ def leaderboard():
 
         summary.insert(0, "Rank", range(1, len(summary) + 1))
 
+        # Display
         st.subheader(f"Top Performers in {selected_topic} (Latest Attempt Only)")
         st.dataframe(summary, use_container_width=True)
 
     except Exception as e:
-        st.error(f"Failed to load leaderboard: {e}")
+        st.error(f"Error loading leaderboard: {e}")
 
