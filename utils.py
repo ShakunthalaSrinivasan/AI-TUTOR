@@ -433,7 +433,7 @@ def leaderboard():
             latest_df.groupby("User Name")
             .agg(
                 Accuracy=("Correct", lambda x: round((x.sum() / len(x)) * 100)),
-                Number of Questions=("Correct", "count"),
+                Total_Questions=("Correct", "count"),
                 Latest_Attempt=("Date", "first"),
             )
             .reset_index()
