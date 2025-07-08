@@ -394,7 +394,6 @@ def plot_score():
 
 
 def leaderboard():
-    st.title("AI Tutor for NEET Biology")
     st.header("Leaderboard by Topic")
 
     try:
