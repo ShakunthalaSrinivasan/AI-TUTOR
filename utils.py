@@ -2,6 +2,7 @@ import streamlit as st
 import re
 import random
 from datetime import datetime
+import pytz
 import json, os
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -166,9 +167,13 @@ def get_gsheet_client():
     creds = ServiceAccountCredentials.from_json_keyfile_dict(dict(creds_dict), scope)
     return gspread.authorize(creds)
 
-def save_detailed_quiz_to_gsheet(username,topic, questions, selected_answers, correct_answers, correctness):
+
+def save_detailed_quiz_to_gsheet(username, topic, questions, selected_answers, correct_answers, correctness):
     client = get_gsheet_client()
     sheet = client.open("quiz_scores").sheet1
+
+    # Set IST timezone
+    ist = pytz.timezone("Asia/Kolkata")
 
     for i in range(len(questions)):
         question_text = questions[i].splitlines()[0]
@@ -176,8 +181,11 @@ def save_detailed_quiz_to_gsheet(username,topic, questions, selected_answers, co
         correct = correct_answers[i]
         result = "Correct" if correctness[i] else "Incorrect"
 
+        # Convert to IST
+        timestamp = datetime.now(ist).strftime("%Y-%m-%d %H:%M:%S")
+
         row = [
-            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            timestamp,
             username,
             topic,
             f"Q{i+1}",
@@ -187,6 +195,7 @@ def save_detailed_quiz_to_gsheet(username,topic, questions, selected_answers, co
             result,
         ]
         sheet.append_row(row)
+
 
 def quiz_mode(retriever, model):
     st.subheader("Quiz Mode")
