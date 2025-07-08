@@ -394,66 +394,64 @@ def plot_score():
 
 
 def leaderboard():
-    st.subheader("Leaderboard by Topic")
+    st.title("AI Tutor for NEET Biology")
+    st.header("Leaderboard by Topic")
 
     try:
-        # Load data from Google Sheet
         client = get_gsheet_client()
         sheet = client.open("quiz_scores").sheet1
         records = sheet.get_all_records()
+
         if not records:
-            st.info("No quiz data available.")
+            st.warning("No quiz data found.")
             return
 
         df = pd.DataFrame(records)
 
-        required_cols = {"User Name", "Topic", "Date", "Result"}
-        if not required_cols.issubset(df.columns):
-            st.error("Missing required columns in the sheet.")
-            return
-
-        # Clean and format
+        # Basic cleaning
         df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
-        df["Result"] = df["Result"].str.strip().str.lower()
+        df["Result"] = df["Result"].str.lower().str.strip()
         df["Correct"] = df["Result"].apply(lambda x: 1 if x == "correct" else 0)
 
-        topics = sorted(df["Topic"].dropna().unique())
-        selected_topic = st.selectbox("Select a topic to view leaderboard:", topics)
+        topic_options = sorted(df["Topic"].dropna().unique())
+        selected_topic = st.selectbox("Select a topic to view leaderboard:", topic_options)
 
-        df = df[df["Topic"] == selected_topic].copy()
+        # Filter by topic
+        df_topic = df[df["Topic"] == selected_topic]
 
-        if df.empty:
-            st.warning("No data for the selected topic.")
+        if df_topic.empty:
+            st.info("No quiz data for selected topic.")
             return
 
-        # Get latest attempt date per user for the topic
-        latest_dates = df.groupby("User Name")["Date"].max().reset_index()
-        latest_data = pd.merge(df, latest_dates, on=["User Name", "Date"])
+        # Group: get latest quiz attempt per user
+        latest_attempts = (
+            df_topic.groupby("User Name")["Date"]
+            .max()
+            .reset_index()
+            .rename(columns={"Date": "Latest_Date"})
+        )
 
-        # Calculate accuracy for each user’s latest attempt
-        leaderboard = latest_data.groupby("User Name").agg(
-            Accuracy=("Correct", lambda x: round((x.sum() / len(x)) * 100, 2)),
-            Questions=("Correct", "count"),
-            Latest_Attempt=("Date", "first")
-        ).reset_index()
+        merged = pd.merge(df_topic, latest_attempts, on=["User Name"], how="inner")
+        latest_df = merged[merged["Date"] == merged["Latest_Date"]]
 
-        # Count total attempts per user for the selected topic
-        total_attempts = df.groupby("User Name")["Date"].nunique().reset_index()
-        total_attempts.columns = ["User Name", "Total_Attempts"]
+        summary = (
+            latest_df.groupby("User Name")
+            .agg(
+                Accuracy=("Correct", lambda x: round((x.sum() / len(x)) * 100)),
+                Questions=("Correct", "count"),
+                Latest_Attempt=("Date", "first"),
+                Total_Attempts=("User Name", "count")
+            )
+            .reset_index()
+            .sort_values("Accuracy", ascending=False)
+            .reset_index(drop=True)
+        )
 
-        leaderboard = pd.merge(leaderboard, total_attempts, on="User Name")
+        summary.insert(0, "Rank", range(1, len(summary) + 1))
 
-        # Sort by accuracy descending
-        leaderboard = leaderboard.sort_values(by="Accuracy", ascending=False).reset_index(drop=True)
-        leaderboard.index += 1
-        leaderboard.reset_index(names="Rank", inplace=True)
-
-        st.markdown(f"### Top 5 Performers in *{selected_topic}* (Latest Attempt)")
-
-        st.dataframe(leaderboard.head(5), use_container_width=True)
+        st.subheader(f"Top Performers in {selected_topic} (Latest Attempt Only)")
+        st.dataframe(summary, use_container_width=True)
 
     except Exception as e:
         st.error(f"Failed to load leaderboard: {e}")
-
-
 
