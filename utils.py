@@ -424,23 +424,16 @@ def leaderboard():
             return
 
         # Group: get latest quiz attempt per user
-        latest_attempts = (
-            df_topic.groupby("User Name")["Date"]
-            .max()
-            .reset_index()
-            .rename(columns={"Date": "Latest_Date"})
-        )
+        latest_attempts = (df_topic.groupby("User Name")["Date"].max().reset_index().rename(columns={"Date": "Latest_Date"}))
 
         merged = pd.merge(df_topic, latest_attempts, on=["User Name"], how="inner")
         latest_df = merged[merged["Date"] == merged["Latest_Date"]]
 
-        summary = (
-            latest_df.groupby("User Name")
-            .agg(
+        summary = (latest_df.groupby("User Name").agg(
                 Accuracy=("Correct", lambda x: round((x.sum() / len(x)) * 100)),
                 Questions=("Correct", "count"),
                 Latest_Attempt=("Date", "first"),
-                Total_Attempts=("User Name", "count")
+                ##Total_Attempts=("User Name", "count")
             )
             .reset_index()
             .sort_values("Accuracy", ascending=False)
