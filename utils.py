@@ -392,6 +392,72 @@ def plot_score():
     except Exception as e:
         st.error(f"Failed to load score trend: {e}")
 
+def leaderboard():
+    st.subheader("Leaderboard by Topic")
+
+    try:
+        client = get_gsheet_client()
+        sheet = client.open("quiz_scores").sheet1
+        records = sheet.get_all_records()
+
+        if not records:
+            st.info("No leaderboard data available.")
+            return
+
+        df = pd.DataFrame(records)
+
+        # Preprocessing
+        df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+        df["Result"] = df["Result"].str.lower().str.strip()
+        df["Correct"] = df["Result"].apply(lambda x: 1 if x == "correct" else 0)
+
+        if not {"User Name", "Date", "Topic", "Result"}.issubset(df.columns):
+            st.error("Required columns missing in Google Sheet.")
+            return
+
+        # Group each quiz attempt (User + Topic + Date)
+        attempts = df.groupby(["User Name", "Topic", "Date"]).agg(
+            total_qs=("Result", "count"),
+            correct=("Correct", "sum")
+        ).reset_index()
+        attempts["Accuracy (%)"] = (attempts["correct"] / attempts["total_qs"]) * 100
+
+        # Keep only latest attempt per user per topic
+        latest_attempts = attempts.sort_values("Date").groupby(["User Name", "Topic"]).tail(1)
+
+        # Get all topics
+        all_topics = sorted(latest_attempts["Topic"].unique())
+        selected_topic = st.selectbox("Select a topic to view leaderboard:", all_topics)
+
+        topic_df = latest_attempts[latest_attempts["Topic"] == selected_topic].copy()
+        topic_df.sort_values("Accuracy (%)", ascending=False, inplace=True)
+        topic_df.reset_index(drop=True, inplace=True)
+        topic_df.insert(0, "Rank", topic_df.index + 1)
+
+        # Add total attempts per user
+        total_attempts = attempts[attempts["Topic"] == selected_topic].groupby("User Name")["Date"].count().reset_index()
+        total_attempts.columns = ["User Name", "Total Attempts"]
+        topic_df = topic_df.merge(total_attempts, on="User Name", how="left")
+
+        # Limit to top 5
+        top_df = topic_df.head(5)
+
+        # Display
+        st.markdown(f"### Top 5 Performers in **{selected_topic}** (Latest Attempt)")
+        st.dataframe(
+            top_df[["Rank", "User Name", "Accuracy (%)", "total_qs", "Date", "Total Attempts"]]
+            .rename(columns={
+                "User Name": "User",
+                "total_qs": "Questions",
+                "Date": "Latest Attempt",
+            }),
+            use_container_width=True
+        )
+
+    except Exception as e:
+        st.error(f"Failed to load leaderboard: {e}")
+
+
 
 
 

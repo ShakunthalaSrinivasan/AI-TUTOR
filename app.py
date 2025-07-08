@@ -3,7 +3,7 @@ import streamlit as st
 import google.generativeai as genai
 from langchain.embeddings import OpenAIEmbeddings
 from langchain.vectorstores import FAISS
-from utils import quiz_mode, question_mode, plot_score, view_my_results
+from utils import quiz_mode, question_mode, plot_score, view_my_results, leaderboard
 
 # Streamlit Config
 st.set_page_config(page_title="AI Tutor")
@@ -39,6 +39,7 @@ menu = st.sidebar.radio("Choose an option:", [
     "Run Quiz",
     "View Performance Chart",
     "View my Results",
+    "Leaderboard"
     "Exit"
 ])
 
@@ -54,6 +55,9 @@ elif menu == "View Performance Chart":
 
 elif menu == "View my Results":
     view_my_results()
+
+elif menu == "Leaderboard":
+    leaderboard()
 
 elif menu == "Exit":
     st.write("Thanks for using AI Tutor!")
