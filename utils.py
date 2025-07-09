@@ -168,7 +168,7 @@ def get_gsheet_client():
     return gspread.authorize(creds)
 
 
-def save_detailed_quiz_to_gsheet(username, topic, questions, selected_answers, correct_answers, correctness):
+def save_detailed_quiz_to_gsheet(username, topic, questions, selected_answers, correct_answers, correctness, timings):
     client = get_gsheet_client()
     sheet = client.open("quiz_scores").sheet1
 
@@ -180,6 +180,7 @@ def save_detailed_quiz_to_gsheet(username, topic, questions, selected_answers, c
         selected = selected_answers[i]
         correct = correct_answers[i]
         result = "Correct" if correctness[i] else "Incorrect"
+        time_taken = timings[i] if i < len(timings) else ""
 
         # Convert to IST
         timestamp = datetime.now(ist).strftime("%Y-%m-%d %H:%M:%S")
@@ -193,6 +194,7 @@ def save_detailed_quiz_to_gsheet(username, topic, questions, selected_answers, c
             correct,
             selected,
             result,
+            time_taken
         ]
         sheet.append_row(row)
 
@@ -212,7 +214,8 @@ def quiz_mode(retriever, model):
             "selected_answers": [],
             "correct_answers": [],
             "correctness": [],
-            "saved_to_sheet": False
+            "saved_to_sheet": False,
+            "timings": []  # <-- added for timer
         }
 
     state = st.session_state.quiz_state
@@ -253,8 +256,10 @@ def quiz_mode(retriever, model):
                     "selected_answers": [],
                     "correct_answers": [],
                     "correctness": [],
-                    "saved_to_sheet": False
+                    "saved_to_sheet": False,
+                    "timings": [],  # reset timings
                 })
+                st.session_state.start_time = datetime.now()  # start timer for first question
             st.rerun()
 
     else:
@@ -278,13 +283,19 @@ def quiz_mode(retriever, model):
                 if st.button("Submit", key=f"submit_{index}"):
                     selected_letter = selected[0].lower() if selected else ""
                     feedback, correct_answer, is_correct = check_answer(q, selected_letter, model)
-                    ##is_correct = feedback.strip().lower().startswith("correct")
+
+                    # timer logic
+                    end_time = datetime.now()
+                    start_time = st.session_state.get("start_time", end_time)
+                    time_taken = (end_time - start_time).total_seconds()
+                    state["timings"].append(round(time_taken, 2))
 
                     st.session_state[f"feedback_{index}"] = feedback
                     st.session_state[f"correct_answer_{index}"] = correct_answer
                     st.session_state[f"selected_letter_{index}"] = selected_letter
                     st.session_state[f"is_correct_{index}"] = is_correct
                     st.session_state[f"submitted_{index}"] = True
+                    st.session_state.start_time = None  # reset
                     st.rerun()
 
             else:
@@ -303,10 +314,14 @@ def quiz_mode(retriever, model):
                         state["score"] += 1
 
                     state["index"] += 1
+                    st.session_state.start_time = datetime.now()  # timer for next question
                     st.rerun()
 
         else:
             st.success(f"Quiz Completed! Your Score: {state['score']} / {state['total']}")
+            if state.get("timings"):
+                total_time = sum(state["timings"])
+                st.info(f"Total time taken: **{total_time:.2f} seconds**")
 
             if not state["saved_to_sheet"]:
                 save_detailed_quiz_to_gsheet(
@@ -315,7 +330,8 @@ def quiz_mode(retriever, model):
                     state["questions"],
                     state["selected_answers"],
                     state["correct_answers"],
-                    state["correctness"]
+                    state["correctness"],
+                    state["timings"]
                 )
                 update_topicwise_performance(state["topic"], state["score"], state["total"])
                 state["saved_to_sheet"] = True
@@ -336,7 +352,8 @@ def quiz_mode(retriever, model):
                     "selected_answers": [],
                     "correct_answers": [],
                     "correctness": [],
-                    "saved_to_sheet": False
+                    "saved_to_sheet": False,
+                    "timings": []
                 }
                 st.rerun()
 
