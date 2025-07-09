@@ -8,6 +8,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
+import time
+import threading
 
 def question_mode(retriever, model):
     st.subheader("Ask a Question")
@@ -200,6 +202,7 @@ def save_detailed_quiz_to_gsheet(username, topic, questions, selected_answers, c
 
 
 def quiz_mode(retriever, model):
+
     st.subheader("Quiz Mode")
 
     if "quiz_state" not in st.session_state:
@@ -260,6 +263,7 @@ def quiz_mode(retriever, model):
                     "timings": [],
                 })
                 st.session_state.start_time = datetime.now()
+                st.session_state.quiz_start_time = datetime.now()
             st.rerun()
 
     else:
@@ -271,13 +275,32 @@ def quiz_mode(retriever, model):
             q_lines = q.splitlines()
 
             st.markdown(f"### Question {index + 1} of {state['total']}")
-            st.markdown(f"**{q_lines[0]}**")
+            timer_placeholder = st.empty()
+            question_placeholder = st.empty()
 
-            options = [line for line in q_lines[1:] if re.match(r"[A-Da-d]\)", line)]
-            selected = st.radio("Choose your answer:", options, key=f"q{index}_opt")
+            if "timer_start" not in st.session_state:
+                st.session_state.timer_start = time.time()
+
+            question_placeholder.markdown(f"**{q_lines[0]}**")
+
+            def display_timer():
+                while True:
+                    if f"submitted_{index}" in st.session_state and st.session_state[f"submitted_{index}"]:
+                        break
+                    elapsed = int(time.time() - st.session_state.timer_start)
+                    mins, secs = divmod(elapsed, 60)
+                    timer_placeholder.markdown(f"Time: **{mins:02d}:{secs:02d}**")
+                    time.sleep(1)
 
             if f"submitted_{index}" not in st.session_state:
                 st.session_state[f"submitted_{index}"] = False
+
+            if not st.session_state[f"submitted_{index}"]:
+                timer_thread = threading.Thread(target=display_timer)
+                timer_thread.start()
+
+            options = [line for line in q_lines[1:] if re.match(r"[A-Da-d]\)", line)]
+            selected = st.radio("Choose your answer:", options, key=f"q{index}_opt")
 
             if not st.session_state[f"submitted_{index}"]:
                 if st.button("Submit", key=f"submit_{index}"):
@@ -294,6 +317,7 @@ def quiz_mode(retriever, model):
                     st.session_state[f"selected_letter_{index}"] = selected_letter
                     st.session_state[f"is_correct_{index}"] = is_correct
                     st.session_state[f"submitted_{index}"] = True
+                    st.session_state.timer_start = None
                     st.session_state.start_time = None
                     st.rerun()
 
@@ -314,14 +338,15 @@ def quiz_mode(retriever, model):
 
                     state["index"] += 1
                     st.session_state.start_time = datetime.now()
+                    st.session_state.timer_start = time.time()
                     st.rerun()
 
         else:
             st.success(f"Quiz Completed! Your Score: {state['score']} / {state['total']}")
 
             if state["timings"]:
-                avg_time = sum(state["timings"]) / len(state["timings"])
-                st.info(f"Average time per question: **{avg_time:.2f} seconds**")
+                total_time = sum(state["timings"])
+                st.info(f"Total time taken: **{total_time:.2f} seconds**")
 
             if not state["saved_to_sheet"]:
                 save_detailed_quiz_to_gsheet(
@@ -331,13 +356,13 @@ def quiz_mode(retriever, model):
                     state["selected_answers"],
                     state["correct_answers"],
                     state["correctness"],
-                    state["timings"]  # pass timing list here
+                    state["timings"]
                 )
                 update_topicwise_performance(state["topic"], state["score"], state["total"])
                 state["saved_to_sheet"] = True
 
             if st.button("Restart Quiz"):
-                keys_to_clear = [key for key in st.session_state if key.startswith("feedback_") or key.startswith("submitted_") or key.startswith("selected_letter_") or key.startswith("is_correct_") or key.startswith("correct_answer_") or key.startswith("q")]
+                keys_to_clear = [key for key in st.session_state if key.startswith("feedback_") or key.startswith("submitted_") or key.startswith("selected_letter_") or key.startswith("is_correct_") or key.startswith("correct_answer_") or key.startswith("q") or key == "timer_start"]
                 for key in keys_to_clear:
                     del st.session_state[key]
 
@@ -356,7 +381,6 @@ def quiz_mode(retriever, model):
                     "timings": []
                 }
                 st.rerun()
-
 
 def plot_score():
     st.subheader("Performance Trend (Topic-wise Over Time)")
