@@ -217,8 +217,7 @@ def quiz_mode(retriever, model):
             "correct_answers": [],
             "correctness": [],
             "saved_to_sheet": False,
-            "timings": [],
-            "quiz_start_time": None
+            "timings": []
         }
 
     state = st.session_state.quiz_state
@@ -261,16 +260,11 @@ def quiz_mode(retriever, model):
                     "correctness": [],
                     "saved_to_sheet": False,
                     "timings": [],
-                    "quiz_start_time": time.time()
                 })
+                st.session_state.quiz_start_time = datetime.now()
             st.rerun()
 
     else:
-        # Show total elapsed time at the top
-        quiz_elapsed = int(time.time() - state["quiz_start_time"])
-        mins, secs = divmod(quiz_elapsed, 60)
-        st.info(f"Total Quiz Time: {mins:02d}:{secs:02d}")
-
         questions = state["questions"]
         index = state["index"]
 
@@ -292,10 +286,7 @@ def quiz_mode(retriever, model):
                     selected_letter = selected[0].lower() if selected else ""
                     feedback, correct_answer, is_correct = check_answer(q, selected_letter, model)
 
-                    end_time = time.time()
-                    start_time = st.session_state.get("start_time", end_time)
-                    time_taken = end_time - start_time
-                    state["timings"].append(round(time_taken, 2))
+                    state["timings"].append(datetime.now())
 
                     st.session_state[f"feedback_{index}"] = feedback
                     st.session_state[f"correct_answer_{index}"] = correct_answer
@@ -320,16 +311,14 @@ def quiz_mode(retriever, model):
                         state["score"] += 1
 
                     state["index"] += 1
-                    st.session_state.start_time = time.time()
                     st.rerun()
 
         else:
             st.success(f"Quiz Completed! Your Score: {state['score']} / {state['total']}")
 
-            if state["quiz_start_time"]:
-                total_time = int(time.time() - state["quiz_start_time"])
-                mins, secs = divmod(total_time, 60)
-                st.info(f"Total time taken: **{mins:02d}:{secs:02d}**")
+            if state.get("timings"):
+                total_time = (datetime.now() - st.session_state.quiz_start_time).total_seconds()
+                st.info(f"Total time taken: **{total_time:.2f} seconds**")
 
             if not state["saved_to_sheet"]:
                 save_detailed_quiz_to_gsheet(
@@ -339,13 +328,13 @@ def quiz_mode(retriever, model):
                     state["selected_answers"],
                     state["correct_answers"],
                     state["correctness"],
-                    state["timings"]
+                    [total_time]
                 )
                 update_topicwise_performance(state["topic"], state["score"], state["total"])
                 state["saved_to_sheet"] = True
 
             if st.button("Restart Quiz"):
-                keys_to_clear = [key for key in st.session_state if key.startswith("feedback_") or key.startswith("submitted_") or key.startswith("selected_letter_") or key.startswith("is_correct_") or key.startswith("correct_answer_") or key.startswith("q") or key == "timer_start"]
+                keys_to_clear = [key for key in st.session_state if key.startswith("feedback_") or key.startswith("submitted_") or key.startswith("selected_letter_") or key.startswith("is_correct_") or key.startswith("correct_answer_") or key.startswith("q")]
                 for key in keys_to_clear:
                     del st.session_state[key]
 
@@ -361,8 +350,7 @@ def quiz_mode(retriever, model):
                     "correct_answers": [],
                     "correctness": [],
                     "saved_to_sheet": False,
-                    "timings": [],
-                    "quiz_start_time": None
+                    "timings": []
                 }
                 st.rerun()
 
