@@ -138,6 +138,15 @@ def view_my_results():
 
         df = pd.DataFrame(data)
 
+        # Clean up column names
+        df.columns = [col.strip() for col in df.columns]
+        df.rename(columns={
+            "Q#": "Question No",
+            "Your Answer": "Selected Answer",
+            "Time": "Time Taken (s)",
+            "Date": "Timestamp"  
+        }, inplace=True)
+
         # Filter for current user
         df_user = df[df["User Name"].str.lower() == username.strip().lower()]
 
@@ -145,17 +154,17 @@ def view_my_results():
             st.warning("No results found for this name.")
             return
 
-        # Sort by latest first (if timestamp column exists)
+        # Sort by latest first 
         if "Timestamp" in df_user.columns:
             df_user["Timestamp"] = pd.to_datetime(df_user["Timestamp"])
             df_user = df_user.sort_values("Timestamp", ascending=False)
 
         st.success(f"Showing results for: {username}")
 
-        # Show question-wise review
+        # Shows question-wise review
         for idx, row in df_user.iterrows():
             with st.expander(f"{row['Question No']}: {row['Question']}"):
-                st.markdown(f"**Options:** {row.get('Options', '')}")
+                st.markdown(f"**Options:** {row.get('Options', 'N/A')}")
                 st.markdown(f"**Your Answer:** {row['Selected Answer']}")
                 st.markdown(f"**Correct Answer:** {row['Correct Answer']}")
                 st.markdown(f"**Result:** {row['Result']}")
@@ -174,6 +183,8 @@ def view_my_results():
 
     except Exception as e:
         st.error(f"Failed to load results: {e}")
+
+
 
 def get_gsheet_client():
     scope = [
