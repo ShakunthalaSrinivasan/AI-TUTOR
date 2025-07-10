@@ -147,19 +147,6 @@ def view_my_results():
     except Exception as e:
         st.error(f"Failed to load results: {e}")
 
-
-def update_topicwise_performance(topic, score, total, file_path="topics.json"):
-    stats = {}
-    if os.path.exists(file_path):
-        with open(file_path, "r") as f:
-            stats = json.load(f)
-    if topic not in stats:
-        stats[topic] = {"correct": 0, "total": 0}
-    stats[topic]["correct"] += score
-    stats[topic]["total"] += total
-    with open(file_path, "w") as f:
-        json.dump(stats, f, indent=2)
-
 def get_gsheet_client():
     scope = [
         "https://spreadsheets.google.com/feeds",
@@ -465,7 +452,7 @@ def leaderboard():
         )
 
         summary.insert(0, "Rank", range(1, len(summary) + 1))
-        st.dataframe(summary)
+        st.dataframe(summary).head(3)
 
     except Exception as e:
         st.error(f"Failed to load leaderboard: {e}")
