@@ -81,32 +81,45 @@ def generate_mcqs(context, model, num_qs):
 
 def check_answer(question, user_answer, model):
     prompt = f"""
-You are an expert NEET Biology examiner. Evaluate the student's answer to the following MCQ using the context provided.
+You are an expert NEET Biology examiner. Evaluate the student's answer to the following MCQ.
 
 {question}
 
 Student's answer: {user_answer}
 
 Instructions:
-1. First line should be either 'Correct' or 'Incorrect' (based on student's answer).
-2. Second line should say: "The correct answer is X) ..." (e.g., 'The correct answer is b)')
-3. One-line explanation why it's correct.
+1. First line must be: Correct or Incorrect.
+2. Second line: The correct answer is X) ...
+3. Third line: A one-line explanation why it's correct.
 
-Each output must appear on a new line. No merging.
-Do not repeat the question or all options.
-
+Each on a new line. No merging.
+Don't repeat the question or options.
 """
+
     response = model.generate_content(prompt)
-    response_text=response.text.strip()
-    
+    response_text = response.text.strip()
+
+    # Extract correct letter
     match = re.search(r"[Tt]he correct answer is ([a-dA-D])\)", response_text)
     correct_letter = match.group(1).lower() if match else "?"
+
+    # Determine correctness
     is_correct = user_answer.lower() == correct_letter
-    
-    return response_text, correct_letter, is_correct
+
+    # Extract explanation (if it's not neatly split, fallback to last sentence)
+    lines = response_text.splitlines()
+    if len(lines) >= 3:
+        explanation = lines[2].strip()
+    else:
+        # fallback: extract last sentence or guess explanation
+        parts = re.split(r"\. |\n", response_text)
+        explanation = parts[-1].strip() if parts else ""
+
+    return response_text, correct_letter, is_correct, explanation
+
 
 def view_my_results():
-    st.subheader("View My Quiz Results")
+    st.subheader("Review My Quiz Results")
 
     username = st.text_input("Enter your name to view your results:")
 
@@ -132,8 +145,23 @@ def view_my_results():
             st.warning("No results found for this name.")
             return
 
+        # Sort by latest first (if timestamp column exists)
+        if "Timestamp" in df_user.columns:
+            df_user["Timestamp"] = pd.to_datetime(df_user["Timestamp"])
+            df_user = df_user.sort_values("Timestamp", ascending=False)
+
         st.success(f"Showing results for: {username}")
-        st.dataframe(df_user)
+
+        # Show question-wise review
+        for idx, row in df_user.iterrows():
+            with st.expander(f"{row['Question No']}: {row['Question']}"):
+                st.markdown(f"**Options:** {row.get('Options', '')}")
+                st.markdown(f"**Your Answer:** {row['Selected Answer']}")
+                st.markdown(f"**Correct Answer:** {row['Correct Answer']}")
+                st.markdown(f"**Result:** {row['Result']}")
+                st.markdown(f"**Explanation:** {row.get('Explanation', 'N/A')}")
+                st.markdown(f"**Time Taken:** {row.get('Time Taken (s)', 'N/A')} sec")
+                st.markdown(f"**Date:** {row['Timestamp'].strftime('%Y-%m-%d %H:%M:%S')}")
 
         # Download as CSV
         csv = df_user.to_csv(index=False).encode('utf-8')
@@ -157,21 +185,22 @@ def get_gsheet_client():
     return gspread.authorize(creds)
 
 
-def save_detailed_quiz_to_gsheet(username, topic, questions, selected_answers, correct_answers, correctness, timings):
+def save_detailed_quiz_to_gsheet(username, topic, questions, selected_answers, correct_answers, correctness, timings, all_options, explanations):
     client = get_gsheet_client()
     sheet = client.open("quiz_scores").sheet1
 
-    # Set IST timezone
     ist = pytz.timezone("Asia/Kolkata")
 
     for i in range(len(questions)):
-        question_text = questions[i].splitlines()[0]
+        question_text = questions[i].splitlines()[0]  # first line is Q text
         selected = selected_answers[i]
         correct = correct_answers[i]
         result = "Correct" if correctness[i] else "Incorrect"
         time_taken = timings[i] if i < len(timings) else ""
 
-        # Convert to IST
+        options_str = ", ".join(all_options[i])  # list to string
+        explanation = explanations[i] if i < len(explanations) else ""
+
         timestamp = datetime.now(ist).strftime("%Y-%m-%d %H:%M:%S")
 
         row = [
@@ -180,13 +209,14 @@ def save_detailed_quiz_to_gsheet(username, topic, questions, selected_answers, c
             topic,
             f"Q{i+1}",
             question_text,
+            options_str,
             correct,
             selected,
             result,
+            explanation,
             time_taken
         ]
         sheet.append_row(row)
-
 
 def quiz_mode(retriever, model):
     st.subheader("Quiz Mode")
@@ -204,7 +234,9 @@ def quiz_mode(retriever, model):
             "correct_answers": [],
             "correctness": [],
             "saved_to_sheet": False,
-            "timings": []
+            "timings": [],
+            "options_list": [],
+            "explanations": []
         }
 
     state = st.session_state.quiz_state
@@ -247,6 +279,8 @@ def quiz_mode(retriever, model):
                     "correctness": [],
                     "saved_to_sheet": False,
                     "timings": [],
+                    "options_list": [],
+                    "explanations": []
                 })
                 st.session_state.quiz_start_time = datetime.now()
             st.rerun()
@@ -271,15 +305,24 @@ def quiz_mode(retriever, model):
             if not st.session_state[f"submitted_{index}"]:
                 if st.button("Submit", key=f"submit_{index}"):
                     selected_letter = selected[0].lower() if selected else ""
-                    feedback, correct_answer, is_correct = check_answer(q, selected_letter, model)
 
-                    state["timings"].append(datetime.now())
+                    # Updated check_answer returns explanation too
+                    feedback, correct_answer, is_correct, explanation = check_answer(q, selected_letter, model)
 
+                    # Save timing
+                    state["timings"].append((datetime.now() - st.session_state.quiz_start_time).total_seconds())
+
+                    # Save feedback
                     st.session_state[f"feedback_{index}"] = feedback
                     st.session_state[f"correct_answer_{index}"] = correct_answer
                     st.session_state[f"selected_letter_{index}"] = selected_letter
                     st.session_state[f"is_correct_{index}"] = is_correct
                     st.session_state[f"submitted_{index}"] = True
+
+                    # Save options and explanation
+                    state["options_list"].append(options)
+                    state["explanations"].append(explanation)
+
                     st.rerun()
 
             else:
@@ -302,22 +345,21 @@ def quiz_mode(retriever, model):
 
         else:
             st.success(f"Quiz Completed! Your Score: {state['score']} / {state['total']}")
-
-            if state.get("timings"):
-                total_time = (datetime.now() - st.session_state.quiz_start_time).total_seconds()
-                st.info(f"Total time taken: **{total_time:.2f} seconds**")
+            total_time = (datetime.now() - st.session_state.quiz_start_time).total_seconds()
+            st.info(f"Total time taken: **{total_time:.2f} seconds**")
 
             if not state["saved_to_sheet"]:
                 save_detailed_quiz_to_gsheet(
-                    state["username"],
-                    state["topic"],
-                    state["questions"],
-                    state["selected_answers"],
-                    state["correct_answers"],
-                    state["correctness"],
-                    [total_time]
+                    username=state["username"],
+                    topic=state["topic"],
+                    questions=state["questions"],
+                    selected_answers=state["selected_answers"],
+                    correct_answers=state["correct_answers"],
+                    correctness=state["correctness"],
+                    timings=state["timings"],
+                    all_options=state["options_list"],
+                    explanations=state["explanations"]
                 )
-                update_topicwise_performance(state["topic"], state["score"], state["total"])
                 state["saved_to_sheet"] = True
 
             if st.button("Restart Quiz"):
@@ -337,7 +379,9 @@ def quiz_mode(retriever, model):
                     "correct_answers": [],
                     "correctness": [],
                     "saved_to_sheet": False,
-                    "timings": []
+                    "timings": [],
+                    "options_list": [],
+                    "explanations": []
                 }
                 st.rerun()
 
@@ -355,7 +399,7 @@ def plot_score():
 
         df = pd.DataFrame(records)
 
-        required_cols = {"User Name", "Date", "Topic", "Result"}
+        required_cols = {"User Name", "Timestamp", "Topic", "Result"}
         if not required_cols.issubset(df.columns):
             st.error("Missing required columns in Google Sheet.")
             return
@@ -365,12 +409,12 @@ def plot_score():
 
         df = df[df["User Name"] == selected_user].copy()
 
-        # Round to minute to group by quiz attempt
-        df["Date"] = pd.to_datetime(df["Date"], errors="coerce").dt.floor("min")
+        # Convert timestamp and prepare for grouping
+        df["Timestamp"] = pd.to_datetime(df["Timestamp"], errors="coerce").dt.floor("min")
         df["Result"] = df["Result"].str.lower().str.strip()
         df["Correct"] = df["Result"].apply(lambda x: 1 if x == "correct" else 0)
 
-        grouped = df.groupby(["Date", "Topic"]).agg(
+        grouped = df.groupby(["Timestamp", "Topic"]).agg(
             total_qs=pd.NamedAgg(column="Result", aggfunc="count"),
             correct=pd.NamedAgg(column="Correct", aggfunc="sum")
         ).reset_index()
@@ -383,16 +427,15 @@ def plot_score():
 
         st.markdown(f"### Accuracy Trend for *{selected_user}*")
 
-        plt.clf()
         fig, ax = plt.subplots(figsize=(10, 5))
 
         for topic in grouped["Topic"].unique():
             topic_df = grouped[grouped["Topic"] == topic]
-            ax.plot(topic_df["Date"], topic_df["Accuracy"], marker="o", label=topic)
+            ax.plot(topic_df["Timestamp"], topic_df["Accuracy"], marker="o", label=topic)
 
         ax.set_ylabel("Accuracy (%)")
         ax.set_title("Topic-wise Accuracy Over Time")
-        ax.set_ylim(0, 110)
+        ax.set_ylim(-10, 110)
         ax.legend(title="Topic")
         ax.grid(True)
         fig.autofmt_xdate()
@@ -400,7 +443,6 @@ def plot_score():
 
     except Exception as e:
         st.error(f"Failed to load score trend: {e}")
-
 
 def leaderboard():
     st.subheader("Leaderboard by Topic")
@@ -410,41 +452,51 @@ def leaderboard():
         sheet = client.open("quiz_scores").sheet1
         df = pd.DataFrame(sheet.get_all_records())
 
-        required_cols = {"User Name", "Date", "Topic", "Result"}
+        # Update column check to match your sheet
+        required_cols = {"User Name", "Timestamp", "Topic", "Result"}
         if not required_cols.issubset(df.columns):
             st.error("Missing required columns in Google Sheet.")
             return
 
         # Preprocess
-        df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+        df["Timestamp"] = pd.to_datetime(df["Timestamp"], errors="coerce")
         df["Result"] = df["Result"].str.lower().str.strip()
         df["Correct"] = df["Result"].apply(lambda x: 1 if x == "correct" else 0)
 
+        # Topic selection
         topic_options = sorted(df["Topic"].dropna().unique())
         selected_topic = st.selectbox("Select Topic", topic_options)
 
         df_topic = df[df["Topic"] == selected_topic]
 
+        # Handle empty topic case
+        if df_topic.empty:
+            st.info(f"No quiz attempts found for topic '{selected_topic}'.")
+            return
+
+        # Find latest attempt per user
         latest_attempts = (
-            df_topic.groupby("User Name")["Date"]
+            df_topic.groupby("User Name")["Timestamp"]
             .max()
             .reset_index()
-            .rename(columns={"Date": "Latest_Date"})
+            .rename(columns={"Timestamp": "Latest_Timestamp"})
         )
 
         merged = pd.merge(df_topic, latest_attempts, on="User Name", how="inner")
 
-        # Compare only date (not time) to avoid microsecond mismatches
-        merged["Date_only"] = merged["Date"].dt.date
-        merged["Latest_Date_only"] = merged["Latest_Date"].dt.date
-        latest_df = merged[merged["Date_only"] == merged["Latest_Date_only"]]
+        # Compare only date to avoid microsecond mismatches
+        merged["Timestamp_only"] = merged["Timestamp"].dt.date
+        merged["Latest_Timestamp_only"] = merged["Latest_Timestamp"].dt.date
 
+        latest_df = merged[merged["Timestamp_only"] == merged["Latest_Timestamp_only"]]
+
+        # Accuracy per user
         summary = (
             latest_df.groupby("User Name")
             .agg(
                 Accuracy=("Correct", lambda x: round((x.sum() / len(x)) * 100)),
                 Total_Questions=("Correct", "count"),
-                Latest_Attempt=("Date", "first"),
+                Latest_Attempt=("Timestamp", "first"),
             )
             .reset_index()
             .sort_values("Accuracy", ascending=False)
@@ -452,9 +504,17 @@ def leaderboard():
         )
 
         summary.insert(0, "Rank", range(1, len(summary) + 1))
-        st.dataframe(summary).head(3)
+
+        # Show top 3 performers
+        st.markdown("###Top 3 Performers")
+        st.dataframe(summary.head(3), use_container_width=True)
+
+        # Expandable full leaderboard
+        with st.expander("📋 See Full Leaderboard"):
+            st.dataframe(summary, use_container_width=True)
 
     except Exception as e:
         st.error(f"Failed to load leaderboard: {e}")
+
 
 
