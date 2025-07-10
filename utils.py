@@ -148,29 +148,25 @@ def view_my_results():
         }, inplace=True)
 
         # Filter for current user
-        df_user = df[df["User Name"].str.lower() == username.strip().lower()]
+        df_user["Timestamp"] = pd.to_datetime(df_user["Timestamp"])
+        df_user = df_user.sort_values("Timestamp", ascending=False)
 
-        if df_user.empty:
-            st.warning("No results found for this name.")
-            return
+        # Group by each quiz attempt: Timestamp + Topic
+        grouped = df_user.groupby([df_user["Timestamp"].dt.strftime('%Y-%m-%d %H:%M'), "Topic"])
 
-        # Sort by latest first 
-        if "Timestamp" in df_user.columns:
-            df_user["Timestamp"] = pd.to_datetime(df_user["Timestamp"])
-            df_user = df_user.sort_values("Timestamp", ascending=False)
+        for (attempt_time, topic), group in grouped:
+            with st.container():
+                st.markdown(f"### Attempt on {attempt_time} — Topic: *{topic}*")
 
-        st.success(f"Showing results for: {username}")
-
-        # Shows question-wise review
-        for idx, row in df_user.iterrows():
-            with st.expander(f"{row['Question No']}: {row['Question']}"):
+        for _, row in group.iterrows():
+            question_text = row['Question'].split('. ', 1)[-1]
+            with st.expander(f"{row['Question No']} - {question_text}"):
                 st.markdown(f"**Options:** {row.get('Options', 'N/A')}")
                 st.markdown(f"**Your Answer:** {row['Selected Answer']}")
                 st.markdown(f"**Correct Answer:** {row['Correct Answer']}")
                 st.markdown(f"**Result:** {row['Result']}")
                 st.markdown(f"**Explanation:** {row.get('Explanation', 'N/A')}")
                 st.markdown(f"**Time Taken:** {row.get('Time Taken (s)', 'N/A')} sec")
-                st.markdown(f"**Date:** {row['Timestamp'].strftime('%Y-%m-%d %H:%M:%S')}")
 
         # Download as CSV
         csv = df_user.to_csv(index=False).encode('utf-8')
@@ -521,7 +517,7 @@ def leaderboard():
         st.dataframe(summary.head(3), use_container_width=True)
 
         # Expandable full leaderboard
-        with st.expander("📋 See Full Leaderboard"):
+        with st.expander("See Full Leaderboard"):
             st.dataframe(summary, use_container_width=True)
 
     except Exception as e:
