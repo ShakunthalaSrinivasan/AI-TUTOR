@@ -202,7 +202,6 @@ def save_detailed_quiz_to_gsheet(username, topic, questions, selected_answers, c
 
 
 def quiz_mode(retriever, model):
-
     st.subheader("Quiz Mode")
 
     if "quiz_state" not in st.session_state:
@@ -218,7 +217,8 @@ def quiz_mode(retriever, model):
             "correct_answers": [],
             "correctness": [],
             "saved_to_sheet": False,
-            "timings": []
+            "timings": [],
+            "quiz_start_time": None
         }
 
     state = st.session_state.quiz_state
@@ -261,12 +261,16 @@ def quiz_mode(retriever, model):
                     "correctness": [],
                     "saved_to_sheet": False,
                     "timings": [],
+                    "quiz_start_time": time.time()
                 })
-                st.session_state.start_time = datetime.now()
-                st.session_state.quiz_start_time = datetime.now()
             st.rerun()
 
     else:
+        # Show total elapsed time at the top
+        quiz_elapsed = int(time.time() - state["quiz_start_time"])
+        mins, secs = divmod(quiz_elapsed, 60)
+        st.info(f"Total Quiz Time: {mins:02d}:{secs:02d}")
+
         questions = state["questions"]
         index = state["index"]
 
@@ -275,50 +279,22 @@ def quiz_mode(retriever, model):
             q_lines = q.splitlines()
 
             st.markdown(f"### Question {index + 1} of {state['total']}")
-            timer_placeholder = st.empty()
-            question_placeholder = st.empty()
-            
-            if "timer_start" not in st.session_state:
-                st.session_state.timer_start = time.time()
-            
-            question_placeholder.markdown(f"**{q_lines[0]}**")
-            
-            # Live timer logic using rerun loop
-            elapsed = int(time.time() - st.session_state.timer_start)
-            mins, secs = divmod(elapsed, 60)
-            timer_placeholder.markdown(f"Time: **{mins:02d}:{secs:02d}**")
-            
-            # Automatically refresh every second (except after submission)
-            if not st.session_state.get(f"submitted_{index}", False):
-                time.sleep(1)
-                st.experimental_rerun()
-            def display_timer():
-                while True:
-                    if f"submitted_{index}" in st.session_state and st.session_state[f"submitted_{index}"]:
-                        break
-                    elapsed = int(time.time() - st.session_state.timer_start)
-                    mins, secs = divmod(elapsed, 60)
-                    timer_placeholder.markdown(f"Time: **{mins:02d}:{secs:02d}**")
-                    time.sleep(1)
-
-            if f"submitted_{index}" not in st.session_state:
-                st.session_state[f"submitted_{index}"] = False
-
-            if not st.session_state[f"submitted_{index}"]:
-                timer_thread = threading.Thread(target=display_timer)
-                timer_thread.start()
+            st.markdown(f"**{q_lines[0]}**")
 
             options = [line for line in q_lines[1:] if re.match(r"[A-Da-d]\)", line)]
             selected = st.radio("Choose your answer:", options, key=f"q{index}_opt")
+
+            if f"submitted_{index}" not in st.session_state:
+                st.session_state[f"submitted_{index}"] = False
 
             if not st.session_state[f"submitted_{index}"]:
                 if st.button("Submit", key=f"submit_{index}"):
                     selected_letter = selected[0].lower() if selected else ""
                     feedback, correct_answer, is_correct = check_answer(q, selected_letter, model)
 
-                    end_time = datetime.now()
+                    end_time = time.time()
                     start_time = st.session_state.get("start_time", end_time)
-                    time_taken = (end_time - start_time).total_seconds()
+                    time_taken = end_time - start_time
                     state["timings"].append(round(time_taken, 2))
 
                     st.session_state[f"feedback_{index}"] = feedback
@@ -326,8 +302,6 @@ def quiz_mode(retriever, model):
                     st.session_state[f"selected_letter_{index}"] = selected_letter
                     st.session_state[f"is_correct_{index}"] = is_correct
                     st.session_state[f"submitted_{index}"] = True
-                    st.session_state.timer_start = None
-                    st.session_state.start_time = None
                     st.rerun()
 
             else:
@@ -346,16 +320,16 @@ def quiz_mode(retriever, model):
                         state["score"] += 1
 
                     state["index"] += 1
-                    st.session_state.start_time = datetime.now()
-                    st.session_state.timer_start = time.time()
+                    st.session_state.start_time = time.time()
                     st.rerun()
 
         else:
             st.success(f"Quiz Completed! Your Score: {state['score']} / {state['total']}")
 
-            if state["timings"]:
-                total_time = sum(state["timings"])
-                st.info(f"Total time taken: **{total_time:.2f} seconds**")
+            if state["quiz_start_time"]:
+                total_time = int(time.time() - state["quiz_start_time"])
+                mins, secs = divmod(total_time, 60)
+                st.info(f"Total time taken: **{mins:02d}:{secs:02d}**")
 
             if not state["saved_to_sheet"]:
                 save_detailed_quiz_to_gsheet(
@@ -387,7 +361,8 @@ def quiz_mode(retriever, model):
                     "correct_answers": [],
                     "correctness": [],
                     "saved_to_sheet": False,
-                    "timings": []
+                    "timings": [],
+                    "quiz_start_time": None
                 }
                 st.rerun()
 
