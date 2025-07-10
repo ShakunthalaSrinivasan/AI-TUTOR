@@ -277,12 +277,21 @@ def quiz_mode(retriever, model):
             st.markdown(f"### Question {index + 1} of {state['total']}")
             timer_placeholder = st.empty()
             question_placeholder = st.empty()
-
+            
             if "timer_start" not in st.session_state:
                 st.session_state.timer_start = time.time()
-
+            
             question_placeholder.markdown(f"**{q_lines[0]}**")
-
+            
+            # Live timer logic using rerun loop
+            elapsed = int(time.time() - st.session_state.timer_start)
+            mins, secs = divmod(elapsed, 60)
+            timer_placeholder.markdown(f"Time: **{mins:02d}:{secs:02d}**")
+            
+            # Automatically refresh every second (except after submission)
+            if not st.session_state.get(f"submitted_{index}", False):
+                time.sleep(1)
+                st.experimental_rerun()
             def display_timer():
                 while True:
                     if f"submitted_{index}" in st.session_state and st.session_state[f"submitted_{index}"]:
