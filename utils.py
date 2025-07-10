@@ -161,7 +161,7 @@ def view_my_results():
 
         for (attempt_time, topic), group in grouped:
             with st.container():
-            st.markdown(f"### Attempt on {attempt_time} — Topic: *{topic}*")
+                st.markdown(f"### Attempt on {attempt_time} — Topic: *{topic}*")
 
             for _, row in group.iterrows():   
                 question_text = row['Question'].split('. ', 1)[-1]
