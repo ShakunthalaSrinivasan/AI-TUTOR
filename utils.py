@@ -148,6 +148,11 @@ def view_my_results():
         }, inplace=True)
 
         # Filter for current user
+        df_user = df[df["User Name"].str.lower() == username.strip().lower()]
+
+        if df_user.empty:
+            st.warning("No results found for this name.")
+            return
         df_user["Timestamp"] = pd.to_datetime(df_user["Timestamp"])
         df_user = df_user.sort_values("Timestamp", ascending=False)
 
@@ -179,8 +184,6 @@ def view_my_results():
 
     except Exception as e:
         st.error(f"Failed to load results: {e}")
-
-
 
 def get_gsheet_client():
     scope = [
